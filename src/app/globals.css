@@ -1,0 +1,175 @@
+@import "tailwindcss";
+
+:root {
+  --background: #eef2f7;
+  --foreground: #1a1d26;
+  --accent-blue: #5ba4c9;
+  --accent-blue-light: #8ecae6;
+  --accent-sage: #7eb09a;
+  --accent-lavender: #b8a9d4;
+  --accent-gold: #c5944e;
+  --accent-steel: #a5b4c4;
+  --muted: #6b7280;
+  --glass: rgba(255, 255, 255, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.65);
+  --glow-blue: rgba(91, 164, 201, 0.35);
+  --glow-sage: rgba(126, 176, 154, 0.25);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+}
+
+::selection {
+  background: rgba(91, 164, 201, 0.28);
+}
+
+/* Ambient mesh background */
+.mesh-bg {
+  background-color: #eef2f7;
+  background-image:
+    radial-gradient(ellipse 80% 60% at 10% 20%, rgba(142, 202, 230, 0.22) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 90% 10%, rgba(184, 169, 212, 0.18) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 70% at 80% 90%, rgba(126, 176, 154, 0.15) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 20% 80%, rgba(91, 164, 201, 0.12) 0%, transparent 50%);
+}
+
+/* Glass card */
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    0 4px 24px -4px rgba(26, 29, 38, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.glass-strong {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(28px) saturate(1.5);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow:
+    0 8px 32px -8px rgba(26, 29, 38, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* Button shimmer */
+.btn-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.18) 50%,
+    transparent 60%
+  );
+  transform: translateX(-100%);
+  transition: transform 0.6s ease;
+}
+
+.btn-shimmer:hover::after {
+  transform: translateX(100%);
+}
+
+/* Neural pulse ring */
+@keyframes neural-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.08); }
+}
+
+@keyframes synapse-flow {
+  0% { stroke-dashoffset: 24; opacity: 0.2; }
+  50% { opacity: 0.8; }
+  100% { stroke-dashoffset: 0; opacity: 0.2; }
+}
+
+@keyframes float-orb {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(12px, -18px) scale(1.05); }
+  66% { transform: translate(-8px, 10px) scale(0.97); }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-float-orb {
+  animation: float-orb 12s ease-in-out infinite;
+}
+
+.animate-fade-up {
+  animation: fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Score slider */
+.score-slider { height: 6px; }
+
+.score-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, #7eb09a, #5ba4c9, #b8a9d4, #e8a87c);
+  opacity: 0.4;
+}
+
+.score-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: white;
+  border: 2.5px solid var(--thumb-color, #5ba4c9);
+  box-shadow: 0 2px 12px var(--glow-blue);
+  margin-top: -9px;
+  cursor: grab;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.score-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
+  box-shadow: 0 4px 16px var(--glow-blue);
+}
+
+.score-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, #7eb09a, #5ba4c9, #b8a9d4);
+  opacity: 0.4;
+}
+
+.score-slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: white;
+  border: 2.5px solid var(--thumb-color, #5ba4c9);
+  box-shadow: 0 2px 12px var(--glow-blue);
+}
+
+html { scroll-behavior: smooth; }
+
+:focus-visible {
+  outline: 2px solid rgba(91, 164, 201, 0.55);
+  outline-offset: 3px;
+}
