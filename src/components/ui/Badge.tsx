@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { STATUS_LABELS } from '@/lib/status';
-import type { DisplayStatus, Role } from '@/lib/types';
+import type { ClientStatus, DisplayStatus, Role } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 type Tone = 'neutral' | 'navy' | 'gold' | 'success' | 'warning' | 'danger' | 'info';
@@ -52,6 +52,17 @@ export function StatusBadge({ status }: { status: DisplayStatus }) {
     <Badge tone={statusTone[status]} dot>
       {STATUS_LABELS[status]}
     </Badge>
+  );
+}
+
+export function ClientStatusBadge({ status, forced, title }: { status: ClientStatus; forced?: boolean; title?: string }) {
+  return (
+    <span title={title}>
+      <Badge tone={status === 'active' ? 'success' : 'neutral'} dot>
+        {status === 'active' ? 'Actif' : 'Inactif'}
+        {forced && <span className="font-normal opacity-70">· manuel</span>}
+      </Badge>
+    </span>
   );
 }
 

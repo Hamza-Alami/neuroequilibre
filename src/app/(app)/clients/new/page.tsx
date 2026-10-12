@@ -9,26 +9,31 @@ import { useToast } from '@/components/ui/Toast';
 import { createClient } from '@/lib/db/clients';
 import { errorMessage } from '@/lib/db/errors';
 import { listKycSections } from '@/lib/db/kyc';
+import { listSources } from '@/lib/db/sources';
 import { useAsync } from '@/lib/hooks';
 
 function NewClientContent() {
   const router = useRouter();
   const params = useSearchParams();
   const toast = useToast();
-  const sections = useAsync(() => listKycSections(), []);
+  const config = useAsync(async () => {
+    const [sections, sources] = await Promise.all([listKycSections(), listSources()]);
+    return { sections, sources };
+  }, []);
   const thenBook = params.get('then') === 'book';
 
-  if (sections.loading) return <PageLoader />;
-  if (sections.error) return <Alert tone="error">{errorMessage(sections.error)}</Alert>;
+  if (config.loading) return <PageLoader />;
+  if (config.error || !config.data) return <Alert tone="error">{errorMessage(config.error)}</Alert>;
 
   return (
     <ClientForm
-      sections={sections.data ?? []}
+      sections={config.data.sections}
+      sources={config.data.sources}
       submitLabel={thenBook ? 'Créer et réserver une séance' : 'Créer la fiche client'}
       onCancel={() => router.back()}
       onSubmit={async (input) => {
         const client = await createClient(input);
-        toast.success(`Fiche de ${client.first_name} ${client.last_name} créée.`);
+        toast.success(`Fiche de ${client.first_name} ${client.last_name} créée (code ${client.code}).`);
         router.push(thenBook ? `/sessions/new?client=${client.id}` : `/clients/${client.id}`);
       }}
     />

@@ -5,6 +5,7 @@ import {
   CalendarClock,
   CheckCircle2,
   ClipboardEdit,
+  MessageCircle,
   Pencil,
   RotateCcw,
   Trash2,
@@ -24,6 +25,7 @@ import { displayStatus } from '@/lib/status';
 import { formatCalendarDate, dateKey, formatTime, sessionEnd } from '@/lib/time';
 import type { SessionWithRelations } from '@/lib/types';
 import { fullName } from '@/lib/utils';
+import { SessionMessageModal } from '@/components/messages/SessionMessageModal';
 import { SessionForm } from './SessionForm';
 
 type Pending = 'cancel' | 'delete' | null;
@@ -43,9 +45,11 @@ export function SessionDetailModal({
   const [pending, setPending] = useState<Pending>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [messaging, setMessaging] = useState(false);
 
   const close = () => {
     setEditing(false);
+    setMessaging(false);
     setError(null);
     onClose();
   };
@@ -157,6 +161,11 @@ export function SessionDetailModal({
                   {session.has_assessment ? 'Voir l’évaluation' : 'Remplir l’évaluation'}
                 </Button>
               )}
+              {status === 'upcoming' && (
+                <Button variant="secondary" size="sm" icon={MessageCircle} onClick={() => setMessaging(true)}>
+                  Confirmation / rappel
+                </Button>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-2 border-t border-line pt-5">
@@ -235,6 +244,7 @@ export function SessionDetailModal({
         onConfirm={() => run(() => deleteSession(session.id), 'Séance supprimée.')}
         onCancel={() => setPending(null)}
       />
+      <SessionMessageModal session={session} open={messaging} onClose={() => setMessaging(false)} />
     </>
   );
 }

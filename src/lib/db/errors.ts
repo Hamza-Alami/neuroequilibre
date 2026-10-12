@@ -23,6 +23,7 @@ export function toAppError(error: unknown, context?: string): AppError {
 
   if (e.hint === 'SLOT_ERROR') return new AppError(message, 'slot');
   if (e.hint === 'GAP_WARNING') return new AppError(message, 'gap');
+  if (e.hint === 'PAYMENT_ERROR') return new AppError(message, 'conflict');
 
   if (e.code === '23505') {
     if (message.includes('sessions_box_start_unique')) {
@@ -30,6 +31,12 @@ export function toAppError(error: unknown, context?: string): AppError {
     }
     if (message.includes('boxes_name_key')) {
       return new AppError('Un box porte déjà ce nom.', 'conflict');
+    }
+    if (message.includes('packs_name_key')) {
+      return new AppError('Un pack porte déjà ce nom.', 'conflict');
+    }
+    if (message.includes('acquisition_sources_label_key')) {
+      return new AppError('Cette source existe déjà.', 'conflict');
     }
     return new AppError('Cet élément existe déjà.', 'conflict');
   }

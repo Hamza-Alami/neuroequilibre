@@ -1,7 +1,7 @@
 import { Database } from 'lucide-react';
 import { Logo } from '@/components/layout/Logo';
 
-export function SetupRequired({ reason = 'env' }: { reason?: 'env' | 'schema' }) {
+export function SetupRequired({ reason = 'env' }: { reason?: 'env' | 'schema' | 'migration' }) {
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-lg rounded-2xl border border-line bg-surface p-8 shadow-card">
@@ -20,11 +20,18 @@ export function SetupRequired({ reason = 'env' }: { reason?: 'env' | 'schema' })
             </ul>
             <p>Puis redémarrez l&apos;application (ou redéployez sur Vercel).</p>
           </div>
-        ) : (
+        ) : reason === 'schema' ? (
           <p className="mt-2 text-[14px] leading-relaxed text-ink-soft">
             La base de données est connectée mais le schéma n&apos;est pas installé. Exécutez le fichier{' '}
-            <code className="rounded bg-surface-muted px-1.5 py-0.5 text-[12px]">supabase/schema.sql</code> dans
-            l&apos;éditeur SQL de Supabase.
+            <code className="rounded bg-surface-muted px-1.5 py-0.5 text-[12px]">supabase/schema.sql</code> puis{' '}
+            <code className="rounded bg-surface-muted px-1.5 py-0.5 text-[12px]">supabase/migrations/002_clients_packs_messages.sql</code>{' '}
+            dans l&apos;éditeur SQL de Supabase.
+          </p>
+        ) : (
+          <p className="mt-2 text-[14px] leading-relaxed text-ink-soft">
+            Une mise à jour de la base de données est nécessaire. Exécutez le fichier{' '}
+            <code className="rounded bg-surface-muted px-1.5 py-0.5 text-[12px]">supabase/migrations/002_clients_packs_messages.sql</code>{' '}
+            dans l&apos;éditeur SQL de Supabase, puis rechargez la page.
           </p>
         )}
       </div>

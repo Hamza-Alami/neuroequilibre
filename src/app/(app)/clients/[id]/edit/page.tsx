@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/Toast';
 import { getClient, updateClient } from '@/lib/db/clients';
 import { errorMessage } from '@/lib/db/errors';
 import { listKycSections } from '@/lib/db/kyc';
+import { listSources } from '@/lib/db/sources';
 import { useAsync } from '@/lib/hooks';
 
 export default function EditClientPage() {
@@ -15,22 +16,31 @@ export default function EditClientPage() {
   const router = useRouter();
   const toast = useToast();
   const data = useAsync(async () => {
-    const [client, sections] = await Promise.all([getClient(id), listKycSections()]);
-    return { client, sections };
+    const [client, sections, sources] = await Promise.all([
+      getClient(id),
+      listKycSections(),
+      listSources({ includeInactive: true }),
+    ]);
+    return { client, sections, sources };
   }, [id]);
 
   if (data.loading) return <PageLoader />;
   if (data.error) return <Alert tone="error">{errorMessage(data.error)}</Alert>;
   if (!data.data?.client) return <Alert tone="warning">Client introuvable.</Alert>;
-  const { client, sections } = data.data;
+  const { client, sections, sources } = data.data;
 
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader eyebrow="Clients" title={`Modifier · ${client.first_name} ${client.last_name}`} />
+      <PageHeader
+        eyebrow={`Clients · ${client.code}`}
+        title={`Modifier · ${client.first_name} ${client.last_name}`}
+        description="Corrigez ou mettez à jour les informations du client. Chaque modification est tracée dans le journal."
+      />
       <ClientForm
         initial={client}
         sections={sections}
-        submitLabel="Enregistrer"
+        sources={sources}
+        submitLabel="Enregistrer les modifications"
         onCancel={() => router.back()}
         onSubmit={async (input) => {
           await updateClient(id, input);

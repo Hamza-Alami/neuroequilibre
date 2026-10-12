@@ -171,10 +171,8 @@ insert into public.kyc_fields (section_id, label, field_type, options, is_requir
 select s.id, f.label, f.field_type::public.kyc_field_type, f.options, false, f.sort_order
 from s, (values
   ('Profession', 'text', '{}'::text[], 1),
-  ('Comment avez-vous connu le centre ?', 'select',
-    array['Bouche-à-oreille', 'Internet', 'Réseaux sociaux', 'Médecin / thérapeute', 'Autre'], 2),
-  ('Médecin traitant', 'text', '{}'::text[], 3),
-  ('Traitements en cours', 'textarea', '{}'::text[], 4)
+  ('Médecin traitant', 'text', '{}'::text[], 2),
+  ('Traitements en cours', 'textarea', '{}'::text[], 3)
 ) as f (label, field_type, options, sort_order);
 
 -- =============================================================================

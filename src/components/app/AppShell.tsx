@@ -4,13 +4,18 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   CalendarDays,
   CalendarPlus,
+  ChartColumn,
   ClipboardList,
   Clock,
+  Compass,
   FileText,
   History,
   LayoutDashboard,
   LogOut,
+  Megaphone,
   Menu,
+  MessageSquareText,
+  Package,
   Settings,
   SquareStack,
   UserPlus,
@@ -37,6 +42,9 @@ const MAIN_NAV: NavItem[] = [
   { href: '/', label: 'Tableau de bord', icon: LayoutDashboard, exact: true },
   { href: '/planning', label: 'Planning', icon: CalendarDays },
   { href: '/clients', label: 'Clients', icon: Users },
+  { href: '/packs', label: 'Packs', icon: Package },
+  { href: '/messages', label: 'Messages groupés', icon: Megaphone },
+  { href: '/etats', label: 'États', icon: ChartColumn },
 ];
 
 const ADMIN_NAV: NavItem[] = [
@@ -44,6 +52,8 @@ const ADMIN_NAV: NavItem[] = [
   { href: '/admin/horaires', label: 'Horaires & séances', icon: Clock },
   { href: '/admin/questionnaire', label: 'Questionnaire', icon: ClipboardList },
   { href: '/admin/kyc', label: 'Formulaire KYC', icon: FileText },
+  { href: '/admin/sources', label: 'Origine des clients', icon: Compass },
+  { href: '/admin/messages', label: 'Modèles de messages', icon: MessageSquareText },
   { href: '/admin/utilisateurs', label: 'Utilisateurs', icon: UsersRound },
   { href: '/admin/journal', label: 'Journal', icon: History },
   { href: '/admin/parametres', label: 'Paramètres', icon: Settings },

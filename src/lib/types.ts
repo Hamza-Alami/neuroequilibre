@@ -29,6 +29,8 @@ export interface CentreSettings {
   min_gap_minutes: number;
   slot_step_minutes: number;
   opening_hours: OpeningHours;
+  currency_label: string;
+  phone_country_code: string;
   updated_at?: string;
 }
 
@@ -75,6 +77,8 @@ export type CustomFieldValue = string | number | boolean | null;
 
 export interface Client {
   id: string;
+  code: string;
+  source_id: string | null;
   first_name: string;
   last_name: string;
   date_of_birth: string;
@@ -92,7 +96,90 @@ export interface Client {
   updated_at: string;
 }
 
-export type ClientInput = Omit<Client, 'id' | 'created_at' | 'updated_at'>;
+export type ClientInput = Omit<Client, 'id' | 'code' | 'created_at' | 'updated_at'>;
+
+export interface AcquisitionSource {
+  id: string;
+  label: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export type ClientStatus = 'active' | 'inactive';
+export type StatusMode = ClientStatus | 'auto';
+
+export interface ClientStatusInfo {
+  client_id: string;
+  status: ClientStatus;
+  is_override: boolean;
+  reason: string;
+}
+
+export interface ClientStatusChange {
+  id: string;
+  client_id: string;
+  mode: StatusMode;
+  effective_date: string;
+  reason: string | null;
+  created_at: string;
+}
+
+export interface Pack {
+  id: string;
+  name: string;
+  description: string | null;
+  reference_price: number;
+  session_count: number;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export type PaymentMethod = 'especes' | 'carte' | 'virement' | 'cheque' | 'autre';
+
+export interface PackPayment {
+  id: string;
+  client_pack_id: string;
+  amount: number;
+  paid_on: string;
+  method: PaymentMethod;
+  note: string | null;
+  created_at: string;
+}
+
+/** A pack sold to a client, with usage and balance computed by the database. */
+export interface ClientPack {
+  id: string;
+  client_id: string;
+  pack_id: string | null;
+  pack_name: string;
+  reference_price: number;
+  session_count: number;
+  offered_sessions: number;
+  agreed_price: number;
+  sold_on: string;
+  notes: string | null;
+  created_at: string;
+  total_sessions: number;
+  booked_sessions: number;
+  used_sessions: number;
+  paid_amount: number;
+  remaining_amount: number;
+  last_paid_on: string | null;
+}
+
+export type MessageKind = 'confirmation' | 'reminder' | 'birthday' | 'broadcast';
+export type MessageChannel = 'whatsapp' | 'email';
+
+export interface MessageTemplate {
+  id: string;
+  kind: MessageKind;
+  title: string;
+  body: string;
+  email_subject: string | null;
+  email_body: string | null;
+  sort_order: number;
+  is_active: boolean;
+}
 
 export interface Session {
   id: string;

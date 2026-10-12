@@ -1,3 +1,4 @@
+import { downloadBlob } from '@/lib/export/table';
 import { drawBrandHeader, drawFooters, hexToRgb, loadLogo, PDF_COLORS } from '@/lib/pdf/brand';
 import { STATUS_LABELS, displayStatus } from '@/lib/status';
 import { dateKey, fmt, formatCalendarDate, formatTime, sessionEnd } from '@/lib/time';
@@ -30,15 +31,6 @@ function rows(sessions: SessionWithRelations[]) {
   }));
 }
 
-function download(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 export function exportPlanningCsv(ctx: ExportContext) {
   const header = ['Date', 'Jour', 'Début', 'Fin', 'Durée (min)', 'Box', 'Client', 'Téléphone', 'N° séance', 'Statut', 'Notes'];
   const escape = (v: string) => (/[";\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
@@ -48,7 +40,7 @@ export function exportPlanningCsv(ctx: ExportContext) {
       .join(';')
   );
   const csv = '\uFEFF' + [header.join(';'), ...lines].join('\r\n');
-  download(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${ctx.fileBase}.csv`);
+  downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${ctx.fileBase}.csv`);
 }
 
 export async function exportPlanningPdf(ctx: ExportContext) {

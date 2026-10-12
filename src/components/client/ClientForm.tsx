@@ -1,13 +1,13 @@
 'use client';
 
-import { Contact, HeartPulse, MapPin, StickyNote, UserRound } from 'lucide-react';
+import { Compass, Contact, HeartPulse, MapPin, StickyNote, UserRound } from 'lucide-react';
 import { useState, type ComponentType, type FormEvent, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Alert } from '@/components/ui/Feedback';
 import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/Field';
 import { todayKey } from '@/lib/time';
-import type { Client, ClientInput, CustomFieldValue, KycField, KycSection } from '@/lib/types';
+import type { AcquisitionSource, Client, ClientInput, CustomFieldValue, KycField, KycSection } from '@/lib/types';
 
 const COUNTRIES = ['Maroc', 'France', 'Belgique', 'Suisse', 'Canada', 'Espagne', 'Tunisie', 'Algérie', 'Sénégal', 'Côte d’Ivoire', 'Autre'];
 
@@ -54,6 +54,7 @@ function emptyInput(): ClientInput {
     emergency_contact_name: '',
     emergency_contact_phone: '',
     notes: '',
+    source_id: null,
     custom_fields: {},
   };
 }
@@ -108,24 +109,28 @@ function CustomFieldInput({
 export function ClientForm({
   initial,
   sections,
+  sources,
   submitLabel,
   onSubmit,
   onCancel,
 }: {
   initial?: Client;
   sections: KycSection[];
+  sources: AcquisitionSource[];
   submitLabel: string;
   onSubmit: (input: ClientInput) => Promise<void>;
   onCancel?: () => void;
 }) {
   const [form, setForm] = useState<ClientInput>(() => {
     if (!initial) return emptyInput();
-    const { id: _id, created_at: _c, updated_at: _u, ...rest } = initial;
+    const { id: _id, code: _code, created_at: _c, updated_at: _u, ...rest } = initial;
     void _id;
+    void _code;
     void _c;
     void _u;
     return { ...emptyInput(), ...rest, custom_fields: { ...(rest.custom_fields ?? {}) } };
   });
+  const sourceOptions = sources.filter((s) => s.is_active || s.id === initial?.source_id);
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -150,6 +155,7 @@ export function ClientForm({
     if (!form.email.trim()) e.email = 'L’email est requis.';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) e.email = 'Adresse email invalide.';
     if (!form.city.trim()) e.city = 'La ville est requise.';
+    if (!form.source_id) e.source_id = 'Indiquez comment le client est venu au centre.';
     for (const s of sections) {
       for (const f of s.fields) {
         const v = form.custom_fields[f.id];
@@ -209,6 +215,24 @@ export function ClientForm({
             onChange={(e) => set('date_of_birth', e.target.value)}
             error={errors.date_of_birth}
           />
+        </Field>
+        {initial && (
+          <Field label="Code client" hint="Attribué automatiquement, non modifiable.">
+            <Input value={initial.code} disabled className="tabular" />
+          </Field>
+        )}
+      </Section>
+
+      <Section icon={Compass} title="Origine" description="Permet de suivre d’où viennent les nouveaux clients.">
+        <Field label="Comment le client est venu ?" required error={errors.source_id}>
+          <Select value={form.source_id ?? ''} onChange={(e) => set('source_id', e.target.value || null)} error={errors.source_id}>
+            <option value="">Sélectionner…</option>
+            {sourceOptions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </Select>
         </Field>
       </Section>
 

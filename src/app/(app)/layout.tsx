@@ -29,6 +29,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!settingsRes.data) {
     return <SetupRequired reason="schema" />;
   }
+  if (!('currency_label' in settingsRes.data)) {
+    return <SetupRequired reason="migration" />;
+  }
 
   return (
     <AppProvider

@@ -20,6 +20,8 @@ export default function SettingsPage() {
   const [name, setName] = useState(settings.centre_name);
   const [welcome, setWelcome] = useState(settings.welcome_message);
   const [timezone, setTimezone] = useState(settings.timezone);
+  const [currency, setCurrency] = useState(settings.currency_label);
+  const [countryCode, setCountryCode] = useState(settings.phone_country_code);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,10 +31,18 @@ export default function SettingsPage() {
 
   async function save() {
     if (!name.trim()) return setError('Le nom du centre est requis.');
+    const code = countryCode.replace(/\D/g, '');
+    if (!/^\d{1,4}$/.test(code)) return setError('Indicatif téléphonique invalide (ex. : 212 pour le Maroc).');
     setSaving(true);
     setError(null);
     try {
-      await updateSettings({ centre_name: name.trim(), welcome_message: welcome.trim(), timezone });
+      await updateSettings({
+        centre_name: name.trim(),
+        welcome_message: welcome.trim(),
+        timezone,
+        currency_label: currency.trim(),
+        phone_country_code: code,
+      });
       await refreshConfig();
       toast.success('Paramètres enregistrés.');
     } catch (e) {
@@ -78,6 +88,14 @@ export default function SettingsPage() {
                 ))}
               </Select>
             </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Devise" hint="Affichée après les montants (ex. : DH, MAD, €).">
+                <Input value={currency} onChange={(e) => setCurrency(e.target.value)} maxLength={6} />
+              </Field>
+              <Field label="Indicatif WhatsApp par défaut" hint="Ajouté aux numéros locaux (06…) : 212 pour le Maroc.">
+                <Input value={countryCode} onChange={(e) => setCountryCode(e.target.value)} inputMode="numeric" maxLength={5} className="tabular" />
+              </Field>
+            </div>
             <div className="flex justify-end">
               <Button icon={Save} onClick={save} loading={saving}>
                 Enregistrer

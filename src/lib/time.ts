@@ -46,12 +46,12 @@ export function timeKey(date: Date | string) {
   return format(inCentre(date), 'HH:mm');
 }
 
-/** Combine a local centre date + time into a UTC ISO string. */
 /** True if the given centre-local date + time is already in the past. */
 export function isPastSlot(date: string, time: string) {
   return new Date(toUtcIso(date, time)).getTime() < Date.now();
 }
 
+/** Combine a local centre date + time into a UTC ISO string. */
 export function toUtcIso(date: string, time: string) {
   const [y, m, d] = date.split('-').map(Number);
   const [h, min] = time.split(':').map(Number);

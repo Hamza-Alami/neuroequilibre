@@ -1,23 +1,27 @@
 'use client';
 
-import { CalendarDays, CalendarPlus, ClipboardList, Clock, UserPlus, Users } from 'lucide-react';
+import { Cake, CalendarDays, CalendarPlus, ClipboardList, Clock, MessageCircle, UserPlus, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useApp } from '@/components/app/AppProvider';
 import { SessionDetailModal } from '@/components/booking/SessionDetailModal';
+import { MessageModal } from '@/components/messages/MessageModal';
 import { AgendaList } from '@/components/planning/AgendaList';
 import { BoxTag } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, StatCard } from '@/components/ui/Card';
 import { Alert, EmptyState, PageLoader } from '@/components/ui/Feedback';
 import { getSupabase } from '@/lib/supabase/client';
-import { errorMessage } from '@/lib/db/errors';
+import { upcomingBirthdays } from '@/lib/birthdays';
+import { errorMessage, unwrap } from '@/lib/db/errors';
 import { useLegacyData } from '@/lib/db/legacy-import';
 import { listSessionsBetween } from '@/lib/db/sessions';
 import { useAsync } from '@/lib/hooks';
 import { addDaysToKey, fmt, formatCalendarDate, formatTime, nowInCentre, sessionEnd, todayKey, utcBounds } from '@/lib/time';
-import type { SessionWithRelations } from '@/lib/types';
+import type { Client, SessionWithRelations } from '@/lib/types';
 import { fullName } from '@/lib/utils';
+
+type BirthdayClient = Pick<Client, 'id' | 'code' | 'first_name' | 'last_name' | 'date_of_birth' | 'phone' | 'email'>;
 
 function greeting() {
   const h = nowInCentre().getHours();
@@ -33,12 +37,14 @@ export default function DashboardPage() {
 
   const data = useAsync(async () => {
     const recent = utcBounds(addDaysToKey(today, -30), addDaysToKey(today, 14));
-    const [sessions, clientCount] = await Promise.all([
+    const [sessions, clients] = await Promise.all([
       listSessionsBetween(recent.start, recent.end),
-      getSupabase().from('clients').select('id', { count: 'exact', head: true }),
+      getSupabase().from('clients').select('id, code, first_name, last_name, date_of_birth, phone, email'),
     ]);
-    return { sessions, clientCount: clientCount.count ?? 0 };
+    const list = unwrap(clients) as BirthdayClient[];
+    return { sessions, clientCount: list.length, birthdays: upcomingBirthdays(list, today).filter((b) => b.daysUntil < 7) };
   }, [today]);
+  const [wishing, setWishing] = useState<BirthdayClient | null>(null);
 
   const view = useMemo(() => {
     const sessions = (data.data?.sessions ?? []).filter((s) => s.status !== 'cancelled');
@@ -171,6 +177,39 @@ export default function DashboardPage() {
                 </div>
               </Card>
 
+              {(data.data?.birthdays.length ?? 0) > 0 && (
+                <Card padded={false} className="overflow-hidden">
+                  <div className="flex items-center gap-2 border-b border-line px-5 py-4">
+                    <Cake className="h-4 w-4 text-gold" />
+                    <h2 className="text-[15px] font-semibold text-ink">Anniversaires</h2>
+                    <Link href="/etats/anniversaires" className="ml-auto text-[12px] font-medium text-navy hover:underline">
+                      Tout voir
+                    </Link>
+                  </div>
+                  <ul className="divide-y divide-line">
+                    {data.data!.birthdays.map((b) => (
+                      <li key={b.client.id} className="flex items-center justify-between gap-3 px-5 py-2.5">
+                        <Link href={`/clients/${b.client.id}`} className="min-w-0">
+                          <span className="block truncate text-[13px] font-medium text-ink hover:text-navy">
+                            {b.client.first_name} {b.client.last_name}
+                          </span>
+                          <span className="block text-[12px] text-ink-muted">
+                            {b.daysUntil === 0 ? 'Aujourd’hui' : b.daysUntil === 1 ? 'Demain' : formatCalendarDate(b.next, 'EEEE d MMMM')} · {b.age} ans
+                          </span>
+                        </Link>
+                        <Button
+                          size="sm"
+                          variant={b.daysUntil === 0 ? 'accent' : 'ghost'}
+                          icon={MessageCircle}
+                          title="Souhaiter un joyeux anniversaire"
+                          onClick={() => setWishing(b.client)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+
               <Card padded={false} className="overflow-hidden">
                 <div className="flex items-center gap-2 border-b border-line px-5 py-4">
                   <ClipboardList className="h-4 w-4 text-warning" />
@@ -220,6 +259,7 @@ export default function DashboardPage() {
       )}
 
       <SessionDetailModal session={selected} onClose={() => setSelected(null)} onChanged={() => data.reload({ silent: true })} />
+      {wishing && <MessageModal open client={wishing} sessions={[]} initialKind="birthday" onClose={() => setWishing(null)} />}
     </>
   );
 }

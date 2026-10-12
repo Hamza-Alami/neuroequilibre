@@ -1,12 +1,27 @@
 'use client';
 
-import { CalendarCheck, CalendarClock, CalendarPlus, ClipboardCheck, Mail, MapPin, Pencil, Phone, Trash2 } from 'lucide-react';
+import {
+  CalendarClock,
+  CalendarPlus,
+  ClipboardCheck,
+  Mail,
+  MapPin,
+  MessageCircle,
+  Package,
+  Pencil,
+  Phone,
+  Trash2,
+} from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useMemo, useState } from 'react';
 import { useApp } from '@/components/app/AppProvider';
 import { SessionDetailModal } from '@/components/booking/SessionDetailModal';
 import { EvolutionPanel } from '@/components/client/EvolutionPanel';
+import { StatusModal } from '@/components/client/StatusModal';
+import { MessageModal } from '@/components/messages/MessageModal';
+import { ClientPacksPanel } from '@/components/packs/ClientPacksPanel';
 import { AgendaList } from '@/components/planning/AgendaList';
+import { ClientStatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, StatCard } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -17,14 +32,18 @@ import { listClientAssessments } from '@/lib/db/assessments';
 import { deleteClient, getClient } from '@/lib/db/clients';
 import { errorMessage } from '@/lib/db/errors';
 import { listKycSections } from '@/lib/db/kyc';
+import { listClientPacks, listPayments } from '@/lib/db/packs';
 import { listClientSessions } from '@/lib/db/sessions';
+import { listSources } from '@/lib/db/sources';
+import { getClientStatus } from '@/lib/db/status';
 import { computeClientEvolution } from '@/lib/evolution';
 import { useAsync } from '@/lib/hooks';
-import { calculateAge, fmt, formatDate } from '@/lib/time';
+import { formatMoney } from '@/lib/money';
+import { calculateAge, fmt, formatDate, todayKey } from '@/lib/time';
 import type { CustomFieldValue, SessionWithRelations } from '@/lib/types';
 import { getInitials } from '@/lib/utils';
 
-type Tab = 'sessions' | 'evolution' | 'infos';
+type Tab = 'sessions' | 'packs' | 'evolution' | 'infos';
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -45,21 +64,27 @@ function ClientProfile() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const params = useSearchParams();
-  const { isAdmin } = useApp();
+  const { isAdmin, settings } = useApp();
   const toast = useToast();
   const [tab, setTab] = useState<Tab>((params.get('tab') as Tab) || 'sessions');
   const [selected, setSelected] = useState<SessionWithRelations | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [messageOpen, setMessageOpen] = useState(false);
 
   const data = useAsync(async () => {
-    const [client, sessions, assessments, sections] = await Promise.all([
+    const [client, sessions, assessments, sections, packs, status, sources] = await Promise.all([
       getClient(id),
       listClientSessions(id),
       listClientAssessments(id),
       listKycSections({ includeInactive: true }),
+      listClientPacks(id),
+      getClientStatus(id, todayKey()),
+      listSources({ includeInactive: true }),
     ]);
-    return { client, sessions, assessments, sections };
+    const payments = await listPayments(packs.map((p) => p.id));
+    return { client, sessions, assessments, sections, packs, payments, status, sources };
   }, [id]);
 
   const evolution = useMemo(
@@ -73,7 +98,10 @@ function ClientProfile() {
     return <EmptyState title="Client introuvable" description="Cette fiche n’existe pas ou a été supprimée." action={<Button href="/clients">Retour aux clients</Button>} />;
   }
 
-  const { client, sessions, sections } = data.data;
+  const { client, sessions, sections, packs, payments, status, sources } = data.data;
+  const reload = () => data.reload({ silent: true });
+  const clientName = `${client.first_name} ${client.last_name}`;
+  const sourceLabel = sources.find((s) => s.id === client.source_id)?.label ?? null;
   const now = new Date().toISOString();
   const active = sessions.filter((s) => s.status !== 'cancelled');
   const upcoming = sessions.filter((s) => s.starts_at >= now).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
@@ -81,6 +109,8 @@ function ClientProfile() {
   const nextSession = upcoming.find((s) => s.status !== 'cancelled');
   const evaluated = sessions.filter((s) => s.has_assessment).length;
   const pendingEvaluation = past.find((s) => s.status !== 'cancelled' && !s.has_assessment);
+  const currentPack = packs.find((p) => p.used_sessions < p.total_sessions) ?? null;
+  const remainingToPay = packs.reduce((sum, p) => sum + p.remaining_amount, 0);
 
   async function onDelete() {
     setDeleting(true);
@@ -97,15 +127,23 @@ function ClientProfile() {
 
   return (
     <>
-      <div className="mb-6 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-4">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-navy text-[18px] font-semibold text-white">
             {getInitials(client.first_name, client.last_name)}
           </div>
           <div className="min-w-0">
-            <h1 className="text-[24px] font-semibold tracking-[-0.02em] text-ink">
-              {client.first_name} {client.last_name}
-            </h1>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-[24px] font-semibold tracking-[-0.02em] text-ink">{clientName}</h1>
+              <span className="tabular rounded-md bg-gold-50 px-2 py-0.5 text-[12px] font-semibold text-gold-700 ring-1 ring-inset ring-gold-100">
+                {client.code}
+              </span>
+              {status && (
+                <button type="button" onClick={() => setStatusOpen(true)} className="rounded-full hover:opacity-80" title="Modifier le statut">
+                  <ClientStatusBadge status={status.status} forced={status.is_override} title={status.reason} />
+                </button>
+              )}
+            </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-muted">
               <span>{calculateAge(client.date_of_birth)} ans</span>
               <span className="inline-flex items-center gap-1.5">
@@ -121,13 +159,14 @@ function ClientProfile() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" icon={MessageCircle} onClick={() => setMessageOpen(true)}>
+            Message
+          </Button>
           <Button variant="secondary" icon={Pencil} href={`/clients/${id}/edit`}>
             Modifier
           </Button>
           {isAdmin && (
-            <Button variant="secondary" icon={Trash2} onClick={() => setConfirmDelete(true)} className="text-danger hover:bg-danger-50">
-              Supprimer
-            </Button>
+            <Button variant="secondary" icon={Trash2} title="Supprimer le client" onClick={() => setConfirmDelete(true)} className="text-danger hover:bg-danger-50" />
           )}
           <Button icon={CalendarPlus} href={`/sessions/new?client=${id}`}>
             Réserver une séance
@@ -135,21 +174,37 @@ function ClientProfile() {
         </div>
       </div>
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard icon={CalendarCheck} label="Séances" value={active.length} hint={`${evaluated} évaluée${evaluated > 1 ? 's' : ''}`} />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           icon={CalendarClock}
-          tone="gold"
           label="Prochaine séance"
           value={<span className="text-[16px]">{nextSession ? fmt(nextSession.starts_at, "d MMM 'à' HH:mm") : '—'}</span>}
-          hint={nextSession?.box?.name}
+          hint={nextSession ? nextSession.box?.name : `${active.length} séance${active.length > 1 ? 's' : ''} au total`}
+        />
+        <StatCard
+          icon={Package}
+          tone="gold"
+          label="Pack en cours"
+          value={
+            <span className="text-[16px]">
+              {currentPack ? `${Math.max(currentPack.total_sessions - currentPack.used_sessions, 0)} séance(s) restante(s)` : '—'}
+            </span>
+          }
+          hint={currentPack ? currentPack.pack_name : packs.length ? 'Tous les packs sont terminés' : 'Aucun pack attribué'}
+        />
+        <StatCard
+          icon={Package}
+          tone={remainingToPay > 0 ? 'gold' : 'success'}
+          label="Reste à payer"
+          value={<span className="text-[16px]">{formatMoney(remainingToPay, settings.currency_label)}</span>}
+          hint={packs.length ? `${packs.length} pack${packs.length > 1 ? 's' : ''} vendu${packs.length > 1 ? 's' : ''}` : undefined}
         />
         <StatCard
           icon={ClipboardCheck}
           tone="success"
           label="Évolution"
           value={`${evolution.difficulties.filter((d) => d.improvement > 0).length} / ${evolution.difficulties.length}`}
-          hint="difficultés en amélioration"
+          hint={`difficultés en amélioration · ${evaluated} évaluation${evaluated > 1 ? 's' : ''}`}
         />
       </div>
 
@@ -173,6 +228,7 @@ function ClientProfile() {
         onChange={setTab}
         tabs={[
           { value: 'sessions', label: 'Séances', count: sessions.length },
+          { value: 'packs', label: 'Packs & règlements', count: packs.length },
           { value: 'evolution', label: 'Évolution', count: evolution.difficulties.length },
           { value: 'infos', label: 'Informations' },
         ]}
@@ -212,13 +268,23 @@ function ClientProfile() {
         </div>
       )}
 
+      {tab === 'packs' && (
+        <ClientPacksPanel clientId={id} clientName={clientName} packs={packs} payments={payments} onChanged={reload} />
+      )}
+
       {tab === 'evolution' && <EvolutionPanel client={client} evolution={evolution} sessions={sessions} />}
 
       {tab === 'infos' && (
         <div className="grid gap-5 lg:grid-cols-2">
           <Card>
-            <h2 className="mb-2 text-[15px] font-semibold text-ink">Identité & coordonnées</h2>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold text-ink">Identité & coordonnées</h2>
+              <Button size="sm" variant="ghost" icon={Pencil} href={`/clients/${id}/edit`}>
+                Modifier
+              </Button>
+            </div>
             <dl className="divide-y divide-line">
+              <InfoRow label="Code client" value={<span className="tabular font-medium">{client.code}</span>} />
               <InfoRow label="Prénom" value={client.first_name} />
               <InfoRow label="Nom" value={client.last_name} />
               <InfoRow label="Date de naissance" value={`${formatDate(client.date_of_birth)} (${calculateAge(client.date_of_birth)} ans)`} />
@@ -227,6 +293,7 @@ function ClientProfile() {
               <InfoRow label="Adresse" value={[client.address_line, client.postal_code, client.city].filter(Boolean).join(', ')} />
               <InfoRow label="Pays" value={client.country} />
               <InfoRow label="Contact d’urgence" value={[client.emergency_contact_name, client.emergency_contact_phone].filter(Boolean).join(' · ')} />
+              <InfoRow label="Venu par" value={sourceLabel} />
               <InfoRow label="Client depuis" value={formatDate(client.created_at)} />
             </dl>
           </Card>
@@ -253,11 +320,26 @@ function ClientProfile() {
         </div>
       )}
 
-      <SessionDetailModal session={selected} onClose={() => setSelected(null)} onChanged={() => data.reload({ silent: true })} />
+      <SessionDetailModal session={selected} onClose={() => setSelected(null)} onChanged={reload} />
+      <StatusModal
+        open={statusOpen}
+        clientId={id}
+        clientName={clientName}
+        current={status}
+        onClose={() => setStatusOpen(false)}
+        onSaved={reload}
+      />
+      <MessageModal
+        open={messageOpen}
+        client={client}
+        sessions={sessions}
+        initialKind={nextSession ? 'reminder' : 'birthday'}
+        onClose={() => setMessageOpen(false)}
+      />
       <ConfirmDialog
         open={confirmDelete}
-        title={`Supprimer ${client.first_name} ${client.last_name} ?`}
-        message="La fiche, toutes les séances et toutes les évaluations de ce client seront définitivement supprimées."
+        title={`Supprimer ${clientName} ?`}
+        message="La fiche, toutes les séances, évaluations, packs et règlements de ce client seront définitivement supprimés."
         confirmLabel="Supprimer définitivement"
         loading={deleting}
         onConfirm={onDelete}

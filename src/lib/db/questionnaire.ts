@@ -60,7 +60,18 @@ export async function deleteDifficulty(id: string) {
 }
 
 /** Persist a new order for themes or difficulties. */
-export async function reorder(table: 'questionnaire_themes' | 'questionnaire_difficulties' | 'kyc_sections' | 'kyc_fields' | 'boxes', ids: string[]) {
+export async function reorder(
+  table:
+    | 'questionnaire_themes'
+    | 'questionnaire_difficulties'
+    | 'kyc_sections'
+    | 'kyc_fields'
+    | 'boxes'
+    | 'acquisition_sources'
+    | 'packs'
+    | 'message_templates',
+  ids: string[]
+) {
   const supabase = getSupabase();
   await Promise.all(
     ids.map((id, index) =>
