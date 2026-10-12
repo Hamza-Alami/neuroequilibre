@@ -55,7 +55,12 @@ export default function DashboardPage() {
     const pendingEval = sessions
       .filter((s) => s.starts_at < now && !s.has_assessment)
       .sort((a, b) => b.starts_at.localeCompare(a.starts_at));
-    const nextToday = todayList.find((s) => s.starts_at >= now);
+    const nextStart = todayList.find((s) => s.starts_at >= now)?.starts_at;
+    const nextToday = nextStart
+      ? todayList
+          .filter((s) => s.starts_at === nextStart)
+          .sort((a, b) => (a.box?.name ?? '').localeCompare(b.box?.name ?? '', 'fr', { numeric: true }))
+      : [];
     return { todayList, upcoming, pendingEval, nextToday };
   }, [data.data, today]);
 
@@ -98,9 +103,17 @@ export default function DashboardPage() {
             <StatCard
               icon={Clock}
               tone="gold"
-              label="Prochaine séance"
-              value={<span className="text-[18px]">{view.nextToday ? formatTime(view.nextToday.starts_at) : '—'}</span>}
-              hint={view.nextToday ? `${fullName(view.nextToday.client)} · ${view.nextToday.box?.name}` : 'Plus de séance aujourd’hui'}
+              label={view.nextToday.length > 1 ? `Prochaines séances (${view.nextToday.length})` : 'Prochaine séance'}
+              value={<span className="text-[18px]">{view.nextToday.length ? formatTime(view.nextToday[0].starts_at) : '—'}</span>}
+              hint={
+                view.nextToday.length
+                  ? view.nextToday.map((s) => (
+                      <span key={s.id} className="block">
+                        {s.box?.name} · {fullName(s.client)}
+                      </span>
+                    ))
+                  : 'Plus de séance aujourd’hui'
+              }
             />
             <StatCard icon={CalendarPlus} tone="success" label="7 prochains jours" value={view.upcoming.length} hint="séances réservées" />
             <StatCard icon={Users} tone="muted" label="Clients" value={data.data?.clientCount ?? 0} />

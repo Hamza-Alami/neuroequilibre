@@ -2,7 +2,8 @@
 
 import { ChevronRight, Search, UserPlus, Users } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { type MouseEvent, useMemo, useState } from 'react';
 import { ClientStatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, PageHeader } from '@/components/ui/Card';
@@ -33,6 +34,7 @@ export default function ClientsPage() {
   const [sort, setSort] = useState<Sort>('name');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [sourceFilter, setSourceFilter] = useState('');
+  const router = useRouter();
 
   const all = useMemo(() => {
     if (!data) return [];
@@ -74,6 +76,13 @@ export default function ClientsPage() {
   }, [all, query, sort, statusFilter, sourceFilter]);
 
   const filtered = Boolean(query || sourceFilter || statusFilter !== 'all');
+
+  function openRow(e: MouseEvent, id: string) {
+    if ((e.target as HTMLElement).closest('a, button')) return;
+    const href = `/clients/${id}`;
+    if (e.metaKey || e.ctrlKey) window.open(href, '_blank');
+    else router.push(href);
+  }
 
   return (
     <>
@@ -157,9 +166,13 @@ export default function ClientsPage() {
               </thead>
               <tbody className="divide-y divide-line">
                 {rows.map(({ client: c, status, source, count, next, last }) => (
-                  <tr key={c.id} className="group relative hover:bg-surface-muted/70">
+                  <tr
+                    key={c.id}
+                    onClick={(e) => openRow(e, c.id)}
+                    className="group cursor-pointer hover:bg-surface-muted/70"
+                  >
                     <td className="px-5 py-3">
-                      <Link href={`/clients/${c.id}`} className="flex items-center gap-3 after:absolute after:inset-0">
+                      <Link href={`/clients/${c.id}`} className="flex items-center gap-3">
                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy-50 text-[12px] font-semibold text-navy">
                           {getInitials(c.first_name, c.last_name)}
                         </span>
