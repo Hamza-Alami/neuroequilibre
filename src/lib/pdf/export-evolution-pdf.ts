@@ -98,7 +98,7 @@ export async function exportEvolutionPdf(
     y
   );
   y += 4.5;
-  doc.text(`${client.phone} · ${client.email}`, 14, y);
+  doc.text([client.phone, client.email].filter(Boolean).join(' · '), 14, y);
   y += 10;
 
   const active = sessions.filter((s) => s.status !== 'cancelled').sort((a, b) => a.starts_at.localeCompare(b.starts_at));

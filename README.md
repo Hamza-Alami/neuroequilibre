@@ -29,8 +29,9 @@ Les règles de réservation et de règlement (pas de trop-perçu, pas de date fu
 2. **SQL Editor** → coller et exécuter, dans cet ordre :
    1. [`supabase/schema.sql`](supabase/schema.sql)
    2. [`supabase/migrations/002_clients_packs_messages.sql`](supabase/migrations/002_clients_packs_messages.sql) (codes clients, statuts, packs, règlements, messages)
+   3. [`supabase/migrations/003_client_gender.sql`](supabase/migrations/003_client_gender.sql) (genre du client, email facultatif)
 
-   Si la base existe déjà, n’exécuter que la migration 002 (une seule fois) : les clients existants reçoivent leur code par ordre de création. Tant qu’elle n’est pas exécutée, l’application affiche un écran l’indiquant.
+   Si la base existe déjà, n’exécuter que les migrations qui ne l’ont pas encore été (une seule fois chacune) : les clients existants reçoivent leur code par ordre de création. Tant qu’elle n’est pas exécutée, l’application affiche un écran l’indiquant.
 3. **Authentication → Sign In / Providers → Email** : désactiver « Allow new users to sign up » (les comptes sont créés par l’administrateur).
 4. **Project Settings → API** : récupérer l’URL, la clé `anon` et la clé `service_role`.
 

@@ -7,7 +7,8 @@ import { Card } from '@/components/ui/Card';
 import { Alert } from '@/components/ui/Feedback';
 import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/Field';
 import { todayKey } from '@/lib/time';
-import type { AcquisitionSource, Client, ClientInput, CustomFieldValue, KycField, KycSection } from '@/lib/types';
+import type { AcquisitionSource, Client, ClientInput, CustomFieldValue, Gender, KycField, KycSection } from '@/lib/types';
+import { GENDER_LABELS } from '@/lib/utils';
 
 const COUNTRIES = ['Maroc', 'France', 'Belgique', 'Suisse', 'Canada', 'Espagne', 'Tunisie', 'Algérie', 'Sénégal', 'Côte d’Ivoire', 'Autre'];
 
@@ -44,6 +45,7 @@ function emptyInput(): ClientInput {
   return {
     first_name: '',
     last_name: '',
+    gender: null,
     date_of_birth: '',
     city: '',
     country: 'Maroc',
@@ -152,8 +154,8 @@ export function ClientForm({
     else if (form.date_of_birth > todayKey()) e.date_of_birth = 'La date de naissance ne peut pas être dans le futur.';
     if (!form.phone.trim()) e.phone = 'Le téléphone est requis.';
     else if (!/^[+\d][\d\s().-]{5,}$/.test(form.phone.trim())) e.phone = 'Numéro de téléphone invalide.';
-    if (!form.email.trim()) e.email = 'L’email est requis.';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) e.email = 'Adresse email invalide.';
+    if (!form.gender) e.gender = 'Le genre est requis.';
+    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) e.email = 'Adresse email invalide.';
     if (!form.city.trim()) e.city = 'La ville est requise.';
     if (!form.source_id) e.source_id = 'Indiquez comment le client est venu au centre.';
     for (const s of sections) {
@@ -216,6 +218,13 @@ export function ClientForm({
             error={errors.date_of_birth}
           />
         </Field>
+        <Field label="Genre" required error={errors.gender}>
+          <Select value={form.gender ?? ''} onChange={(e) => set('gender', (e.target.value || null) as Gender | null)} error={errors.gender}>
+            <option value="">Sélectionner…</option>
+            <option value="male">{GENDER_LABELS.male}</option>
+            <option value="female">{GENDER_LABELS.female}</option>
+          </Select>
+        </Field>
         {initial && (
           <Field label="Code client" hint="Attribué automatiquement, non modifiable.">
             <Input value={initial.code} disabled className="tabular" />
@@ -240,7 +249,7 @@ export function ClientForm({
         <Field label="Téléphone" required error={errors.phone}>
           <Input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="+212 6 12 34 56 78" error={errors.phone} />
         </Field>
-        <Field label="Email" required error={errors.email}>
+        <Field label="Email" error={errors.email}>
           <Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="nom@exemple.com" error={errors.email} />
         </Field>
       </Section>

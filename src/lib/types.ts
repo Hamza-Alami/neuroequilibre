@@ -75,12 +75,15 @@ export interface KycSection {
 
 export type CustomFieldValue = string | number | boolean | null;
 
+export type Gender = 'male' | 'female';
+
 export interface Client {
   id: string;
   code: string;
   source_id: string | null;
   first_name: string;
   last_name: string;
+  gender: Gender | null;
   date_of_birth: string;
   city: string;
   country: string;

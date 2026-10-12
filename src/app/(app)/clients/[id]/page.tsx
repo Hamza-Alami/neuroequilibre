@@ -41,7 +41,7 @@ import { useAsync } from '@/lib/hooks';
 import { formatMoney } from '@/lib/money';
 import { calculateAge, fmt, formatDate, todayKey } from '@/lib/time';
 import type { CustomFieldValue, SessionWithRelations } from '@/lib/types';
-import { getInitials } from '@/lib/utils';
+import { GENDER_LABELS, getInitials } from '@/lib/utils';
 
 type Tab = 'sessions' | 'packs' | 'evolution' | 'infos';
 
@@ -145,13 +145,18 @@ function ClientProfile() {
               )}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-muted">
-              <span>{calculateAge(client.date_of_birth)} ans</span>
+              <span>
+                {client.gender ? `${GENDER_LABELS[client.gender]} · ` : ''}
+                {calculateAge(client.date_of_birth)} ans
+              </span>
               <span className="inline-flex items-center gap-1.5">
                 <Phone className="h-3.5 w-3.5" /> {client.phone}
               </span>
-              <span className="inline-flex items-center gap-1.5">
-                <Mail className="h-3.5 w-3.5" /> {client.email}
-              </span>
+              {client.email && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Mail className="h-3.5 w-3.5" /> {client.email}
+                </span>
+              )}
               <span className="inline-flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5" /> {client.city}
               </span>
@@ -287,6 +292,7 @@ function ClientProfile() {
               <InfoRow label="Code client" value={<span className="tabular font-medium">{client.code}</span>} />
               <InfoRow label="Prénom" value={client.first_name} />
               <InfoRow label="Nom" value={client.last_name} />
+              <InfoRow label="Genre" value={client.gender ? GENDER_LABELS[client.gender] : null} />
               <InfoRow label="Date de naissance" value={`${formatDate(client.date_of_birth)} (${calculateAge(client.date_of_birth)} ans)`} />
               <InfoRow label="Téléphone" value={client.phone} />
               <InfoRow label="Email" value={client.email} />
