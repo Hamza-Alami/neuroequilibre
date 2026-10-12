@@ -93,7 +93,8 @@ export async function createUser(input: {
     validatePassword(input.password);
     const role: Role = input.role === 'admin' ? 'admin' : 'manager';
 
-    const { data, error } = await createAdminSupabase().auth.admin.createUser({
+    const admin = createAdminSupabase();
+    const { data, error } = await admin.auth.admin.createUser({
       email,
       password: input.password,
       email_confirm: true,
@@ -104,6 +105,9 @@ export async function createUser(input: {
       if (error.message.toLowerCase().includes('already')) throw new Error('Un compte existe déjà avec cet email.');
       throw new Error(error.message);
     }
+    // Supabase Auth writes app_metadata after the insert, so the profile trigger may not see the role.
+    const { error: profileError } = await admin.from('profiles').update({ role, full_name }).eq('id', data.user.id);
+    if (profileError) throw new Error(profileError.message);
     await log(actor, 'create', { id: data.user.id, label: `${full_name} (${role === 'admin' ? 'Administrateur' : 'Gestionnaire'})` });
     return null;
   });

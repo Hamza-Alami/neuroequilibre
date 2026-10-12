@@ -40,6 +40,8 @@ Copier `.env.local.example` en `.env.local` et renseigner les trois valeurs. Sur
 
 ### 3. Premier administrateur
 
+Node.js 22 ou plus récent est requis.
+
 ```bash
 npm install
 npm run create-user -- admin@exemple.ma "MotDePasse!2026" admin "Nom Prénom"

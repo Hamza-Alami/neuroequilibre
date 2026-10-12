@@ -1,7 +1,5 @@
 // Crée un compte (admin ou gestionnaire) dans Supabase Auth.
 // Usage : npm run create-user -- <email> <mot-de-passe> <admin|manager> "<Nom complet>"
-import { createClient } from '@supabase/supabase-js';
-
 const [email, password, role = 'admin', fullName = ''] = process.argv.slice(2);
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -19,18 +17,33 @@ if (password.length < 8) {
   process.exit(1);
 }
 
-const supabase = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-
-const { data, error } = await supabase.auth.admin.createUser({
-  email,
-  password,
-  email_confirm: true,
-  app_metadata: { role },
-  user_metadata: { full_name: fullName || email.split('@')[0] },
+// Appel HTTP direct à l'API Auth : supabase-js exige un WebSocket natif (Node 22+).
+const res = await fetch(`${url.replace(/\/$/, '')}/auth/v1/admin/users`, {
+  method: 'POST',
+  headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    email,
+    password,
+    email_confirm: true,
+    app_metadata: { role },
+    user_metadata: { full_name: fullName || email.split('@')[0] },
+  }),
 });
+const data = await res.json().catch(() => ({}));
 
-if (error) {
-  console.error(`Échec : ${error.message}`);
+if (!res.ok) {
+  console.error(`Échec : ${data.msg ?? data.message ?? data.error_description ?? res.statusText}`);
   process.exit(1);
 }
-console.log(`Compte créé : ${data.user.email} (${role === 'admin' ? 'Administrateur' : 'Gestionnaire'})`);
+
+// Supabase Auth écrit app_metadata après l'insertion : le trigger du profil ne voit pas toujours le rôle.
+const profile = await fetch(`${url.replace(/\/$/, '')}/rest/v1/profiles?id=eq.${data.id}`, {
+  method: 'PATCH',
+  headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+  body: JSON.stringify({ role }),
+});
+if (!profile.ok) {
+  console.error(`Compte créé mais rôle non appliqué : ${await profile.text()}`);
+  process.exit(1);
+}
+console.log(`Compte créé : ${data.email} (${role === 'admin' ? 'Administrateur' : 'Gestionnaire'})`);

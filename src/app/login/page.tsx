@@ -4,7 +4,7 @@ import { SetupRequired } from '@/components/app/SetupRequired';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { LoginForm } from './LoginForm';
 
-export const metadata = { title: 'Connexion — NeuroÉquilibre' };
+export const metadata = { title: 'Connexion' };
 
 export default async function LoginPage() {
   await connection();
