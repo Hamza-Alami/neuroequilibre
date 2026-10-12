@@ -1,69 +1,108 @@
-'use client';
-
-import { motion } from 'framer-motion';
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
-interface CardProps {
-  children: React.ReactNode;
+export function Card({
+  children,
+  className,
+  padded = true,
+}: {
+  children: ReactNode;
   className?: string;
-  hover?: boolean;
-  onClick?: () => void;
-  delay?: number;
-}
-
-export function Card({ children, className, hover, onClick, delay = 0 }: CardProps) {
+  padded?: boolean;
+}) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.55, delay, ease: [0.22, 1, 0.36, 1] }}
-      whileHover={
-        hover
-          ? {
-              y: -4,
-              transition: { duration: 0.25, ease: [0.22, 1, 0.36, 1] },
-            }
-          : undefined
-      }
-      onClick={onClick}
+    <div
       className={cn(
-        'glass rounded-3xl p-6 transition-shadow duration-300',
-        hover && 'cursor-pointer hover:shadow-[0_12px_40px_-12px_rgba(91,164,201,0.18)]',
+        'rounded-2xl border border-line bg-surface shadow-card',
+        padded && 'p-5 sm:p-6',
         className
       )}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }
 
-export function PageTitle({
+export function CardHeader({
   title,
-  subtitle,
+  description,
+  action,
+  className,
 }: {
-  title: string;
-  subtitle?: string;
+  title: ReactNode;
+  description?: ReactNode;
+  action?: ReactNode;
+  className?: string;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
-      className="mb-10"
-    >
-      <h1 className="bg-gradient-to-br from-[#1a1d26] to-[#4a5568] bg-clip-text text-[32px] font-light tracking-tight text-transparent md:text-[42px]">
-        {title}
-      </h1>
-      {subtitle && (
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.15, duration: 0.5 }}
-          className="mt-3 max-w-xl text-[16px] font-light leading-relaxed text-[#6b7280]"
-        >
-          {subtitle}
-        </motion.p>
+    <div className={cn('mb-5 flex items-start justify-between gap-4', className)}>
+      <div className="min-w-0">
+        <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
+        {description && <p className="mt-1 text-[13px] leading-relaxed text-ink-muted">{description}</p>}
+      </div>
+      {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
+    </div>
+  );
+}
+
+export function PageHeader({
+  title,
+  description,
+  actions,
+  eyebrow,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  eyebrow?: ReactNode;
+}) {
+  return (
+    <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        {eyebrow && (
+          <div className="mb-1.5 text-[12px] font-medium uppercase tracking-[0.08em] text-gold-700">
+            {eyebrow}
+          </div>
+        )}
+        <h1 className="text-[24px] font-semibold tracking-[-0.02em] text-ink sm:text-[28px]">{title}</h1>
+        {description && <p className="mt-1.5 max-w-2xl text-[14px] leading-relaxed text-ink-muted">{description}</p>}
+      </div>
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+    </div>
+  );
+}
+
+export function StatCard({
+  label,
+  value,
+  hint,
+  icon: Icon,
+  tone = 'navy',
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: ReactNode;
+  icon?: React.ComponentType<{ className?: string }>;
+  tone?: 'navy' | 'gold' | 'success' | 'muted';
+}) {
+  const tones = {
+    navy: 'bg-navy-50 text-navy',
+    gold: 'bg-gold-50 text-gold-700',
+    success: 'bg-success-50 text-success',
+    muted: 'bg-surface-muted text-ink-muted',
+  };
+  return (
+    <Card className="flex items-start gap-4">
+      {Icon && (
+        <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', tones[tone])}>
+          <Icon className="h-[18px] w-[18px]" />
+        </div>
       )}
-    </motion.div>
+      <div className="min-w-0">
+        <p className="text-[13px] text-ink-muted">{label}</p>
+        <p className="tabular mt-0.5 text-[24px] font-semibold tracking-tight text-ink">{value}</p>
+        {hint && <p className="mt-0.5 text-[12px] text-ink-muted">{hint}</p>}
+      </div>
+    </Card>
   );
 }

@@ -14,25 +14,19 @@ const appUrl =
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
-  title: 'NeuroÉquilibre Centre — Neural Feedback',
-  description:
-    'Centre de neurofeedback pour l\'équilibre cognitif et émotionnel. Gestion clients, séances et suivi clinique NeuroÉquilibre.',
+  title: {
+    default: 'NeuroÉquilibre Centre',
+    template: '%s — NeuroÉquilibre',
+  },
+  description: 'Gestion des clients, du planning et du suivi des séances de neurofeedback.',
+  robots: { index: false, follow: false },
   icons: {
     icon: '/neuroequilibre-logo.png',
     apple: '/neuroequilibre-logo.png',
   },
-  openGraph: {
-    title: 'NeuroÉquilibre Centre',
-    description: 'Centre de Neural Feedback — NeuroÉquilibre',
-    images: ['/neuroequilibre-logo.png'],
-  },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="fr" className={`${inter.variable} h-full`}>
       <body className="min-h-full">{children}</body>

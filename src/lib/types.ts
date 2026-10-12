@@ -1,4 +1,77 @@
+export type Role = 'admin' | 'manager';
 export type SessionStatus = 'scheduled' | 'completed' | 'cancelled';
+export type DisplayStatus = 'upcoming' | 'past' | 'completed' | 'cancelled';
+export type KycFieldType = 'text' | 'textarea' | 'number' | 'date' | 'select' | 'checkbox';
+
+export interface Profile {
+  id: string;
+  full_name: string;
+  email: string;
+  role: Role;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface DayHours {
+  open: string;
+  close: string;
+  closed: boolean;
+}
+
+/** Keys "1" (Monday) to "7" (Sunday), ISO weekday. */
+export type OpeningHours = Record<string, DayHours>;
+
+export interface CentreSettings {
+  centre_name: string;
+  welcome_message: string;
+  timezone: string;
+  default_session_minutes: number;
+  min_gap_minutes: number;
+  slot_step_minutes: number;
+  opening_hours: OpeningHours;
+  updated_at?: string;
+}
+
+export interface Box {
+  id: string;
+  name: string;
+  color: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export interface BoxBlock {
+  id: string;
+  box_id: string | null;
+  starts_at: string;
+  ends_at: string;
+  reason: string | null;
+  created_at?: string;
+}
+
+export interface KycField {
+  id: string;
+  section_id: string;
+  label: string;
+  field_type: KycFieldType;
+  options: string[];
+  placeholder: string | null;
+  is_required: boolean;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface KycSection {
+  id: string;
+  title: string;
+  description: string | null;
+  sort_order: number;
+  is_active: boolean;
+  fields: KycField[];
+}
+
+export type CustomFieldValue = string | number | boolean | null;
 
 export interface Client {
   id: string;
@@ -9,25 +82,68 @@ export interface Client {
   country: string;
   phone: string;
   email: string;
-  address_line?: string | null;
-  postal_code?: string | null;
-  emergency_contact_name?: string | null;
-  emergency_contact_phone?: string | null;
-  notes?: string | null;
+  address_line: string | null;
+  postal_code: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  notes: string | null;
+  custom_fields: Record<string, CustomFieldValue>;
   created_at: string;
   updated_at: string;
 }
 
+export type ClientInput = Omit<Client, 'id' | 'created_at' | 'updated_at'>;
+
 export interface Session {
   id: string;
   client_id: string;
-  session_date: string;
-  session_number: number;
+  box_id: string;
+  starts_at: string;
+  duration_minutes: number;
   status: SessionStatus;
-  is_first_session: boolean;
-  duration_minutes?: number | null;
-  notes?: string | null;
+  session_number: number | null;
+  gap_override: boolean;
+  notes: string | null;
   created_at: string;
+}
+
+export interface SessionWithRelations extends Session {
+  client: Pick<Client, 'id' | 'first_name' | 'last_name' | 'phone'> | null;
+  box: Pick<Box, 'id' | 'name' | 'color' | 'is_active'> | null;
+  has_assessment?: boolean;
+}
+
+export interface SessionInput {
+  client_id: string;
+  box_id: string;
+  starts_at: string;
+  duration_minutes: number;
+  notes?: string | null;
+  gap_override?: boolean;
+}
+
+export interface SlotIssue {
+  code: string;
+  level: 'error' | 'warning';
+  message: string;
+}
+
+export interface QuestionnaireDifficulty {
+  id: string;
+  theme_id: string;
+  label: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface QuestionnaireTheme {
+  id: string;
+  emoji: string;
+  title: string;
+  description: string | null;
+  sort_order: number;
+  is_active: boolean;
+  difficulties: QuestionnaireDifficulty[];
 }
 
 export interface Assessment {
@@ -43,29 +159,29 @@ export interface AssessmentResponse {
   id: string;
   assessment_id: string;
   theme_id: string;
+  theme_title: string;
+  theme_emoji: string;
   difficulty_id: string;
+  difficulty_label: string;
   score: number;
-  is_selected: boolean;
-}
-
-export interface QuestionnaireTheme {
-  id: string;
-  emoji: string;
-  title: string;
-  description?: string;
-  difficulties: QuestionnaireDifficulty[];
-}
-
-export interface QuestionnaireDifficulty {
-  id: string;
-  themeId: string;
-  label: string;
 }
 
 export interface AssessmentFormState {
   selectedThemes: string[];
   selectedDifficulties: Record<string, boolean>;
   scores: Record<string, number>;
+}
+
+export interface AuditEntry {
+  id: number;
+  actor_id: string | null;
+  actor_name: string | null;
+  action: string;
+  entity: string;
+  entity_id: string | null;
+  label: string | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
 }
 
 export interface SessionHistoryPoint {
@@ -110,15 +226,4 @@ export interface ClientEvolutionData {
   baselineSessionNumber: number;
   maxSessionNumber: number;
   totalSessions: number;
-}
-
-export interface ClientWithSessions extends Client {
-  sessions: Session[];
-}
-
-export interface SessionDateValidation {
-  valid: boolean;
-  message?: string;
-  minDate?: string;
-  minTime?: string;
 }

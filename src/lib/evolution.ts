@@ -1,4 +1,4 @@
-import { getDifficultyLabel, getThemeById, getScoreLabel } from '@/lib/questionnaire/themes';
+import { getScoreLabel } from '@/lib/questionnaire/scale';
 import type {
   Assessment,
   AssessmentResponse,
@@ -11,172 +11,131 @@ import type {
 
 interface EvolutionInput {
   sessions: Session[];
-  assessments: Assessment[];
-  responses: AssessmentResponse[];
+  assessments: (Assessment & { responses?: AssessmentResponse[] })[];
 }
 
-export function computeClientEvolution(input: EvolutionInput): ClientEvolutionData {
-  const { sessions, assessments, responses } = input;
-  const sessionsById = new Map(sessions.map((s) => [s.id, s]));
+export function computeClientEvolution({ sessions, assessments }: EvolutionInput): ClientEvolutionData {
+  const active = sessions
+    .filter((s) => s.status !== 'cancelled')
+    .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const sessionsById = new Map(active.map((s) => [s.id, s]));
+  const numberOf = (s: Session) => s.session_number ?? active.indexOf(s) + 1;
 
-  const chronologicalSessions = [...sessions].sort(
-    (a, b) => new Date(a.session_date).getTime() - new Date(b.session_date).getTime()
-  );
-
-  const baselineSessionNumber = chronologicalSessions[0]?.session_number ?? 1;
-  const maxSessionNumber =
-    chronologicalSessions[chronologicalSessions.length - 1]?.session_number ?? baselineSessionNumber;
+  const baselineSessionNumber = active[0] ? numberOf(active[0]) : 1;
+  const maxSessionNumber = active.length ? numberOf(active[active.length - 1]) : baselineSessionNumber;
 
   const difficultyMap = new Map<string, DifficultyEvolution>();
-  const themeFirstSeen = new Map<string, { sessionNumber: number; sessionDate: string }>();
+  const themeFirstSeen = new Map<
+    string,
+    { sessionNumber: number; sessionDate: string; title: string; emoji: string }
+  >();
 
-  const sortedAssessments = [...assessments].sort((a, b) => {
-    const sessionA = sessionsById.get(a.session_id);
-    const sessionB = sessionsById.get(b.session_id);
-    return (
-      (sessionA ? new Date(sessionA.session_date).getTime() : 0) -
-      (sessionB ? new Date(sessionB.session_date).getTime() : 0)
+  const ordered = assessments
+    .filter((a) => sessionsById.has(a.session_id))
+    .sort((a, b) =>
+      sessionsById.get(a.session_id)!.starts_at.localeCompare(sessionsById.get(b.session_id)!.starts_at)
     );
-  });
 
-  for (const assessment of sortedAssessments) {
-    const session = sessionsById.get(assessment.session_id);
-    if (!session) continue;
+  for (const assessment of ordered) {
+    const session = sessionsById.get(assessment.session_id)!;
+    const sessionNumber = numberOf(session);
+    const responses = assessment.responses ?? [];
 
     for (const themeId of assessment.selected_themes) {
       if (!themeFirstSeen.has(themeId)) {
+        const sample = responses.find((r) => r.theme_id === themeId);
         themeFirstSeen.set(themeId, {
-          sessionNumber: session.session_number,
-          sessionDate: session.session_date,
+          sessionNumber,
+          sessionDate: session.starts_at,
+          title: sample?.theme_title || themeId,
+          emoji: sample?.theme_emoji || '',
         });
       }
     }
 
-    const assessmentResponses = responses.filter(
-      (r) => r.assessment_id === assessment.id && r.is_selected
-    );
-
-    for (const r of assessmentResponses) {
+    for (const r of responses) {
       if (!difficultyMap.has(r.difficulty_id)) {
-        const theme = getThemeById(r.theme_id);
         difficultyMap.set(r.difficulty_id, {
           difficultyId: r.difficulty_id,
           themeId: r.theme_id,
-          label: getDifficultyLabel(r.difficulty_id),
-          themeEmoji: theme?.emoji ?? '',
-          themeTitle: theme?.title ?? '',
-          firstSessionNumber: session.session_number,
-          firstSessionDate: session.session_date,
+          label: r.difficulty_label || r.difficulty_id,
+          themeEmoji: r.theme_emoji,
+          themeTitle: r.theme_title,
+          firstSessionNumber: sessionNumber,
+          firstSessionDate: session.starts_at,
           history: [],
           improvement: 0,
         });
       }
-
       const entry = difficultyMap.get(r.difficulty_id)!;
-      const existingIdx = entry.history.findIndex(
-        (h) => h.sessionNumber === session.session_number
-      );
-
       const point: SessionHistoryPoint = {
         sessionId: session.id,
-        sessionNumber: session.session_number,
-        sessionDate: session.session_date,
+        sessionNumber,
+        sessionDate: session.starts_at,
         score: r.score,
         isFirstAppearance: false,
-        isBaseline: session.session_number === baselineSessionNumber,
+        isBaseline: sessionNumber === baselineSessionNumber,
       };
-
-      if (existingIdx >= 0) {
-        entry.history[existingIdx] = point;
-      } else {
-        entry.history.push(point);
-      }
+      const existing = entry.history.findIndex((h) => h.sessionNumber === sessionNumber);
+      if (existing >= 0) entry.history[existing] = point;
+      else entry.history.push(point);
     }
   }
 
   const difficulties: DifficultyEvolution[] = [];
-
   for (const entry of difficultyMap.values()) {
     entry.history.sort((a, b) => a.sessionNumber - b.sessionNumber);
-
-    const firstPoint = entry.history[0];
-    if (firstPoint) {
-      entry.firstSessionNumber = firstPoint.sessionNumber;
-      entry.firstSessionDate = firstPoint.sessionDate;
+    entry.history.forEach((h, i) => (h.isFirstAppearance = i === 0));
+    const first = entry.history[0];
+    if (first) {
+      entry.firstSessionNumber = first.sessionNumber;
+      entry.firstSessionDate = first.sessionDate;
     }
-
-    for (let i = 0; i < entry.history.length; i++) {
-      entry.history[i].isFirstAppearance = i === 0;
-    }
-
-    const baselinePoint = entry.history.find(
-      (h) => h.sessionNumber === baselineSessionNumber
-    );
-    const debut = baselinePoint?.score;
+    const baselinePoint = entry.history.find((h) => h.sessionNumber === baselineSessionNumber);
     const latest = entry.history[entry.history.length - 1]?.score;
-    const referenceScore = debut ?? entry.history[0]?.score;
-
-    entry.debut = debut;
+    const reference = baselinePoint?.score ?? first?.score;
+    entry.debut = baselinePoint?.score;
     entry.latest = latest;
     entry.seance10 = entry.history.find((h) => h.sessionNumber === 10)?.score;
     entry.seance20 = entry.history.find((h) => h.sessionNumber === 20)?.score;
-    entry.improvement =
-      referenceScore !== undefined && latest !== undefined ? referenceScore - latest : 0;
+    entry.improvement = reference !== undefined && latest !== undefined ? reference - latest : 0;
     entry.measuredAtBaseline = baselinePoint !== undefined;
-
     difficulties.push(entry);
   }
 
-  difficulties.sort((a, b) => {
-    if (a.firstSessionNumber !== b.firstSessionNumber) {
-      return a.firstSessionNumber - b.firstSessionNumber;
-    }
-    return b.improvement - a.improvement;
-  });
+  difficulties.sort(
+    (a, b) => a.firstSessionNumber - b.firstSessionNumber || b.improvement - a.improvement
+  );
 
-  const themes: ThemeEvolution[] = [];
-  for (const [themeId, firstSeen] of themeFirstSeen) {
-    const theme = getThemeById(themeId);
-    themes.push({
+  const themes: ThemeEvolution[] = [...themeFirstSeen.entries()]
+    .map(([themeId, seen]) => ({
       themeId,
-      emoji: theme?.emoji ?? '',
-      title: theme?.title ?? themeId,
-      firstSessionNumber: firstSeen.sessionNumber,
-      firstSessionDate: firstSeen.sessionDate,
+      emoji: seen.emoji,
+      title: seen.title,
+      firstSessionNumber: seen.sessionNumber,
+      firstSessionDate: seen.sessionDate,
       difficultyCount: difficulties.filter((d) => d.themeId === themeId).length,
-      measuredAtBaseline: firstSeen.sessionNumber === baselineSessionNumber,
-    });
-  }
-
-  themes.sort((a, b) => a.firstSessionNumber - b.firstSessionNumber);
+      measuredAtBaseline: seen.sessionNumber === baselineSessionNumber,
+    }))
+    .sort((a, b) => a.firstSessionNumber - b.firstSessionNumber);
 
   return {
     difficulties,
     themes,
     baselineSessionNumber,
     maxSessionNumber,
-    totalSessions: chronologicalSessions.length,
+    totalSessions: active.length,
   };
 }
 
-export function getDifficultyEvolution(
-  data: ClientEvolutionData,
-  difficultyId: string
-): DifficultyEvolution | undefined {
-  return data.difficulties.find((d) => d.difficultyId === difficultyId);
-}
-
-export function isNewDifficulty(
-  evolution: DifficultyEvolution,
-  baselineSessionNumber: number
-): boolean {
+export function isNewDifficulty(evolution: DifficultyEvolution, baselineSessionNumber: number) {
   return evolution.firstSessionNumber > baselineSessionNumber;
 }
 
-export function isNewTheme(theme: ThemeEvolution, baselineSessionNumber: number): boolean {
+export function isNewTheme(theme: ThemeEvolution, baselineSessionNumber: number) {
   return theme.firstSessionNumber > baselineSessionNumber;
 }
 
-export function formatScoreLabel(score: number): string {
+export function formatScoreLabel(score: number) {
   return getScoreLabel(score);
 }

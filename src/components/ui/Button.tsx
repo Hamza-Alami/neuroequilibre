@@ -1,70 +1,101 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import Link from 'next/link';
+import { Loader2 } from 'lucide-react';
+import type { ComponentType, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'accent' | 'subtle';
+type Size = 'sm' | 'md' | 'lg';
+
+const variants: Record<Variant, string> = {
+  primary:
+    'bg-navy text-white shadow-[0_1px_2px_rgba(21,35,58,0.2)] hover:bg-navy-600 active:bg-navy-700 disabled:bg-navy/40',
+  accent:
+    'bg-gold text-white shadow-[0_1px_2px_rgba(169,123,44,0.3)] hover:bg-gold-700 disabled:bg-gold/40',
+  secondary:
+    'border border-line-strong bg-surface text-ink hover:border-ink-muted/40 hover:bg-surface-muted disabled:text-ink-muted',
+  ghost: 'text-ink-soft hover:bg-navy-50 hover:text-ink disabled:text-ink-muted',
+  subtle: 'bg-navy-50 text-navy hover:bg-navy-100 disabled:text-ink-muted',
+  danger:
+    'bg-danger text-white shadow-[0_1px_2px_rgba(180,35,24,0.25)] hover:bg-[#9a1d14] disabled:bg-danger/40',
+};
+
+const sizes: Record<Size, string> = {
+  sm: 'h-8 gap-1.5 rounded-lg px-3 text-[13px]',
+  md: 'h-10 gap-2 rounded-[10px] px-4 text-[14px]',
+  lg: 'h-12 gap-2 rounded-xl px-6 text-[15px]',
+};
+
 interface ButtonProps {
-  children: React.ReactNode;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'glow';
-  size?: 'sm' | 'md' | 'lg';
+  children?: ReactNode;
+  variant?: Variant;
+  size?: Size;
+  icon?: ComponentType<{ className?: string }>;
+  iconRight?: ComponentType<{ className?: string }>;
   loading?: boolean;
-  className?: string;
   disabled?: boolean;
   type?: 'button' | 'submit' | 'reset';
+  href?: string;
   onClick?: () => void;
+  className?: string;
+  title?: string;
+  fullWidth?: boolean;
+  form?: string;
 }
 
 export function Button({
   children,
   variant = 'primary',
   size = 'md',
+  icon: Icon,
+  iconRight: IconRight,
   loading,
-  className,
   disabled,
   type = 'button',
+  href,
   onClick,
+  className,
+  title,
+  fullWidth,
+  form,
 }: ButtonProps) {
-  const variants = {
-    primary:
-      'btn-shimmer bg-gradient-to-r from-[#3d8aad] via-[#5ba4c9] to-[#4a96b8] text-white shadow-[0_4px_20px_-4px_rgba(91,164,201,0.5)] hover:shadow-[0_6px_28px_-4px_rgba(91,164,201,0.6)] hover:brightness-105',
-    glow:
-      'btn-shimmer bg-gradient-to-r from-[#5ba4c9] to-[#7eb09a] text-white shadow-[0_4px_24px_-4px_rgba(126,176,154,0.45)] hover:shadow-[0_8px_32px_-4px_rgba(126,176,154,0.55)]',
-    secondary:
-      'glass text-[#1a1d26] hover:bg-white/80 shadow-[0_2px_12px_-4px_rgba(26,29,38,0.08)]',
-    ghost: 'text-[#6b7280] hover:text-[#1a1d26] hover:bg-white/40',
-    outline:
-      'border border-[#5ba4c9]/25 bg-white/30 text-[#1a1d26] hover:bg-white/60 hover:border-[#5ba4c9]/40 backdrop-blur-sm',
-  };
+  const classes = cn(
+    'inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap font-medium transition-colors duration-150 disabled:cursor-not-allowed',
+    variants[variant],
+    sizes[size],
+    !children && (size === 'sm' ? 'w-8 px-0' : size === 'md' ? 'w-10 px-0' : 'w-12 px-0'),
+    fullWidth && 'w-full',
+    className
+  );
+  const iconClass = size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4';
+  const content = (
+    <>
+      {loading ? <Loader2 className={cn(iconClass, 'animate-spin')} /> : Icon && <Icon className={iconClass} />}
+      {children}
+      {IconRight && !loading && <IconRight className={iconClass} />}
+    </>
+  );
 
-  const sizes = {
-    sm: 'px-4 py-2 text-[13px] rounded-full',
-    md: 'px-6 py-3 text-[14px] rounded-full',
-    lg: 'px-8 py-4 text-[15px] rounded-full',
-  };
+  if (href && !disabled) {
+    return (
+      <Link href={href} className={classes} title={title}>
+        {content}
+      </Link>
+    );
+  }
 
   return (
-    <motion.button
+    <button
       type={type}
       onClick={onClick}
-      whileHover={{ scale: disabled || loading ? 1 : 1.02, y: disabled || loading ? 0 : -1 }}
-      whileTap={{ scale: disabled || loading ? 1 : 0.97 }}
-      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-      className={cn(
-        'relative inline-flex items-center justify-center gap-2 font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none',
-        variants[variant],
-        sizes[size],
-        className
-      )}
       disabled={disabled || loading}
+      className={classes}
+      title={title}
+      aria-label={!children ? title : undefined}
+      form={form}
     >
-      {loading && (
-        <motion.span
-          className="h-4 w-4 rounded-full border-2 border-current border-t-transparent"
-          animate={{ rotate: 360 }}
-          transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
-        />
-      )}
-      {children}
-    </motion.button>
+      {content}
+    </button>
   );
 }
