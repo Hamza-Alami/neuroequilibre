@@ -9,26 +9,26 @@ import { Field, Input, Select, Textarea } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { errorMessage } from '@/lib/db/errors';
-import { listPacks, PAYMENT_METHODS, sellPack } from '@/lib/db/packs';
+import { listPacks, listPayments, PAYMENT_METHODS, sellPack } from '@/lib/db/packs';
 import { useAsync } from '@/lib/hooks';
 import { formatMoney, parseAmount } from '@/lib/money';
 import { todayKey } from '@/lib/time';
-import type { Pack, PaymentMethod } from '@/lib/types';
+import type { Client, Pack, PackPayment, PaymentMethod } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { ReceiptReady } from './ReceiptReady';
 
 export function SellPackModal({
   open,
-  clientId,
-  clientName,
+  client,
   onClose,
   onSold,
 }: {
   open: boolean;
-  clientId: string;
-  clientName: string;
+  client: Pick<Client, 'id' | 'first_name' | 'last_name' | 'code' | 'gender'>;
   onClose: () => void;
   onSold: () => void;
 }) {
+  const clientName = `${client.first_name} ${client.last_name}`;
   const { settings, isAdmin } = useApp();
   const toast = useToast();
   const currency = settings.currency_label;
@@ -44,6 +44,7 @@ export function SellPackModal({
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [sold, setSold] = useState<{ payment: PackPayment; packName: string; agreed: number } | null>(null);
   const [openedFor, setOpenedFor] = useState(false);
 
   if (open !== openedFor) {
@@ -58,6 +59,7 @@ export function SellPackModal({
       setMethod('especes');
       setNotes('');
       setError(null);
+      setSold(null);
     }
   }
 
@@ -85,8 +87,8 @@ export function SellPackModal({
     setSaving(true);
     setError(null);
     try {
-      await sellPack({
-        clientId,
+      const clientPackId = await sellPack({
+        clientId: client.id,
         packId: pack.id,
         offeredSessions: offeredN,
         agreedPrice: agreedN,
@@ -98,12 +100,39 @@ export function SellPackModal({
       });
       toast.success(`${pack.name} attribué à ${clientName}.`);
       onSold();
-      onClose();
+      const advancePayment = advanceN > 0 ? (await listPayments([clientPackId]))[0] : undefined;
+      if (advancePayment) setSold({ payment: advancePayment, packName: pack.name, agreed: agreedN });
+      else onClose();
     } catch (e) {
       setError(errorMessage(e));
     } finally {
       setSaving(false);
     }
+  }
+
+  if (open && sold) {
+    return (
+      <Modal
+        open
+        onClose={onClose}
+        size="sm"
+        title="Pack attribué"
+        description={`${sold.packName} · ${clientName}`}
+        footer={
+          <Button variant="secondary" onClick={onClose}>
+            Fermer
+          </Button>
+        }
+      >
+        <ReceiptReady
+          payment={sold.payment}
+          client={client}
+          packName={sold.packName}
+          agreedPrice={sold.agreed}
+          paidToDate={sold.payment.amount}
+        />
+      </Modal>
+    );
   }
 
   return (

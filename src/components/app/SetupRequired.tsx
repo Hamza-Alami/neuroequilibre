@@ -23,15 +23,17 @@ export function SetupRequired({ reason = 'env' }: { reason?: 'env' | 'schema' | 
         ) : reason === 'schema' ? (
           <p className="mt-2 text-[14px] leading-relaxed text-ink-soft">
             La base de données est connectée mais le schéma n&apos;est pas installé. Exécutez le fichier{' '}
-            <code className="rounded bg-surface-muted px-1.5 py-0.5 text-[12px]">supabase/schema.sql</code> puis{' '}
-            <code className="rounded bg-surface-muted px-1.5 py-0.5 text-[12px]">supabase/migrations/002_clients_packs_messages.sql</code>{' '}
+            <code className="rounded bg-surface-muted px-1.5 py-0.5 text-[12px]">supabase/schema.sql</code> puis les fichiers du dossier{' '}
+            <code className="rounded bg-surface-muted px-1.5 py-0.5 text-[12px]">supabase/migrations</code> dans l&apos;ordre (002, 003, 004…)
             dans l&apos;éditeur SQL de Supabase.
           </p>
         ) : (
           <p className="mt-2 text-[14px] leading-relaxed text-ink-soft">
-            Une mise à jour de la base de données est nécessaire. Exécutez le fichier{' '}
-            <code className="rounded bg-surface-muted px-1.5 py-0.5 text-[12px]">supabase/migrations/002_clients_packs_messages.sql</code>{' '}
-            dans l&apos;éditeur SQL de Supabase, puis rechargez la page.
+            Une mise à jour de la base de données est nécessaire. Exécutez, dans l&apos;ordre, les fichiers du dossier{' '}
+            <code className="rounded bg-surface-muted px-1.5 py-0.5 text-[12px]">supabase/migrations</code> qui ne l&apos;ont pas encore été
+            (dernier en date :{' '}
+            <code className="rounded bg-surface-muted px-1.5 py-0.5 text-[12px]">004_messages_i18n_receipts_invoices.sql</code>) dans
+            l&apos;éditeur SQL de Supabase, puis rechargez la page.
           </p>
         )}
       </div>

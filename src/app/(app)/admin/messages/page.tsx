@@ -15,8 +15,18 @@ import { useToast } from '@/components/ui/Toast';
 import { errorMessage } from '@/lib/db/errors';
 import { createTemplate, deleteTemplate, listTemplates, MESSAGE_KIND_LABELS, updateTemplate } from '@/lib/db/messages';
 import { useAsync } from '@/lib/hooks';
-import { renderTemplate, TEMPLATE_VARIABLES, type TemplateVars } from '@/lib/messaging';
-import type { MessageKind, MessageTemplate } from '@/lib/types';
+import {
+  hasLanguage,
+  isRtl,
+  LANGUAGE_NAMES,
+  MESSAGE_LANGUAGES,
+  messageVars,
+  renderTemplate,
+  TEMPLATE_VARIABLES,
+  templateTexts,
+  type TemplateVars,
+} from '@/lib/messaging';
+import type { MessageKind, MessageLanguage, MessageTemplate } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 const KIND_ICONS: Record<MessageKind, typeof CalendarCheck> = {
@@ -44,6 +54,18 @@ function VariableChips({ onInsert }: { onInsert: (token: string) => void }) {
   );
 }
 
+type Texts = Record<MessageLanguage, { body: string; subject: string; emailBody: string }>;
+
+function textsOf(template: MessageTemplate | null): Texts {
+  const of = (l: MessageLanguage) => {
+    const t = template ? templateTexts(template, l) : null;
+    return { body: t?.body ?? '', subject: t?.emailSubject ?? '', emailBody: t?.emailBody ?? '' };
+  };
+  return { fr: of('fr'), ar: of('ar'), en: of('en') };
+}
+
+const SAMPLE_SESSION = { starts_at: '2026-10-14T09:30:00Z' };
+
 function TemplateModal({
   open,
   template,
@@ -63,10 +85,9 @@ function TemplateModal({
   const toast = useToast();
   const [kind, setKind] = useState<MessageKind>(defaultKind);
   const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [subject, setSubject] = useState('');
-  const [emailBody, setEmailBody] = useState('');
+  const [texts, setTexts] = useState<Texts>(() => textsOf(null));
   const [tab, setTab] = useState<'whatsapp' | 'email'>('whatsapp');
+  const [language, setLanguage] = useState<MessageLanguage>('fr');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [initFor, setInitFor] = useState<string | null>(null);
@@ -79,13 +100,17 @@ function TemplateModal({
     if (open) {
       setKind(template?.kind ?? defaultKind);
       setTitle(template?.title ?? '');
-      setBody(template?.body ?? '');
-      setSubject(template?.email_subject ?? '');
-      setEmailBody(template?.email_body ?? '');
+      setTexts(textsOf(template));
       setTab('whatsapp');
+      setLanguage('fr');
       setError(null);
     }
   }
+
+  const current = texts[language];
+  const rtl = isRtl(language);
+  const setCurrent = (patch: Partial<Texts[MessageLanguage]>) =>
+    setTexts((t) => ({ ...t, [language]: { ...t[language], ...patch } }));
 
   function insert(ref: React.RefObject<HTMLTextAreaElement | null>, value: string, setValue: (v: string) => void, token: string) {
     const el = ref.current;
@@ -98,28 +123,45 @@ function TemplateModal({
     });
   }
 
-  const sample: TemplateVars = {
-    prenom: 'Sara',
-    nom: 'Bennani',
-    code: 'NE-0042',
-    date: 'mardi 14 octobre',
-    heure: '10h30',
-    box: 'Box 1',
-    centre: settings.centre_name,
-  };
+  const sample: TemplateVars = messageVars({
+    client: { first_name: 'Sara', last_name: 'Bennani', code: 'NE-0042', gender: 'female' },
+    session: SAMPLE_SESSION,
+    boxName: 'Box 1',
+    centreName: settings.centre_name,
+    language,
+  });
 
   async function submit() {
     if (!title.trim()) return setError('Donnez un titre au message.');
-    if (!body.trim()) return setError('Le texte WhatsApp est requis.');
+    if (!texts.fr.body.trim()) {
+      setLanguage('fr');
+      setTab('whatsapp');
+      return setError('Le texte WhatsApp en français est requis.');
+    }
+    for (const l of ['ar', 'en'] as const) {
+      const t = texts[l];
+      if (!t.body.trim() && (t.subject.trim() || t.emailBody.trim())) {
+        setLanguage(l);
+        setTab('whatsapp');
+        return setError(`Ajoutez aussi le texte WhatsApp en ${LANGUAGE_NAMES[l]} : il est utilisé quand l’e-mail n’a pas de texte dédié.`);
+      }
+    }
     setSaving(true);
     setError(null);
     try {
+      const clean = (v: string) => v.trim() || null;
       const input = {
         kind,
         title: title.trim(),
-        body: body.trim(),
-        email_subject: subject.trim() || null,
-        email_body: emailBody.trim() || null,
+        body: texts.fr.body.trim(),
+        email_subject: clean(texts.fr.subject),
+        email_body: clean(texts.fr.emailBody),
+        body_ar: clean(texts.ar.body),
+        email_subject_ar: clean(texts.ar.subject),
+        email_body_ar: clean(texts.ar.emailBody),
+        body_en: clean(texts.en.body),
+        email_subject_en: clean(texts.en.subject),
+        email_body_en: clean(texts.en.emailBody),
       };
       if (template) await updateTemplate(template.id, input);
       else await createTemplate(input, nextOrder);
@@ -167,43 +209,86 @@ function TemplateModal({
           </Field>
         </div>
 
-        <Segmented
-          value={tab}
-          onChange={setTab}
-          options={[
-            { value: 'whatsapp', label: 'Version WhatsApp' },
-            { value: 'email', label: 'Version e-mail' },
-          ]}
-        />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Segmented
+            value={language}
+            onChange={setLanguage}
+            options={MESSAGE_LANGUAGES.map((l) => ({
+              value: l.value,
+              label: (
+                <span className="inline-flex items-center gap-1.5">
+                  {l.label}
+                  {l.value !== 'fr' && !texts[l.value].body.trim() && <span className="text-[11px] font-normal text-ink-muted">(vide)</span>}
+                </span>
+              ),
+            }))}
+          />
+          <Segmented
+            size="sm"
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: 'whatsapp', label: 'Version WhatsApp' },
+              { value: 'email', label: 'Version e-mail' },
+            ]}
+          />
+        </div>
+        {language !== 'fr' && (
+          <p className="text-[12px] text-ink-muted">
+            Facultatif. Tant que la version {LANGUAGE_NAMES[language]} est vide, elle n’est pas proposée à l’envoi.
+          </p>
+        )}
 
         {tab === 'whatsapp' ? (
-          <Field label="Texte WhatsApp" required>
-            <Textarea ref={bodyRef} value={body} onChange={(e) => setBody(e.target.value)} rows={6} />
-            <VariableChips onInsert={(t) => insert(bodyRef, body, setBody, t)} />
+          <Field label={`Texte WhatsApp (${LANGUAGE_NAMES[language]})`} required={language === 'fr'}>
+            <Textarea
+              key={`body-${language}`}
+              ref={bodyRef}
+              dir={rtl ? 'rtl' : 'ltr'}
+              value={current.body}
+              onChange={(e) => setCurrent({ body: e.target.value })}
+              rows={6}
+            />
+            <VariableChips onInsert={(t) => insert(bodyRef, current.body, (v) => setCurrent({ body: v }), t)} />
           </Field>
         ) : (
           <>
-            <Field label="Objet de l’e-mail" hint="Si vide, le titre du modèle est utilisé.">
-              <Input value={subject} onChange={(e) => setSubject(e.target.value)} />
+            <Field
+              label={`Objet de l’e-mail (${LANGUAGE_NAMES[language]})`}
+              hint={language === 'fr' ? 'Si vide, le titre du modèle est utilisé.' : 'Si vide, l’objet en français est utilisé.'}
+            >
+              <Input key={`subject-${language}`} dir={rtl ? 'rtl' : 'ltr'} value={current.subject} onChange={(e) => setCurrent({ subject: e.target.value })} />
             </Field>
-            <Field label="Texte de l’e-mail" hint="Si vide, le texte WhatsApp est réutilisé.">
-              <Textarea ref={emailRef} value={emailBody} onChange={(e) => setEmailBody(e.target.value)} rows={8} />
-              <VariableChips onInsert={(t) => insert(emailRef, emailBody, setEmailBody, t)} />
+            <Field label={`Texte de l’e-mail (${LANGUAGE_NAMES[language]})`} hint="Si vide, le texte WhatsApp de la même langue est réutilisé.">
+              <Textarea
+                key={`email-${language}`}
+                ref={emailRef}
+                dir={rtl ? 'rtl' : 'ltr'}
+                value={current.emailBody}
+                onChange={(e) => setCurrent({ emailBody: e.target.value })}
+                rows={8}
+              />
+              <VariableChips onInsert={(t) => insert(emailRef, current.emailBody, (v) => setCurrent({ emailBody: v }), t)} />
             </Field>
           </>
         )}
 
         <div className="rounded-xl border border-line bg-surface-muted p-4">
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Aperçu (client fictif)</p>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+            Aperçu ({LANGUAGE_NAMES[language]}, cliente fictive Sara Bennani)
+          </p>
           {tab === 'email' && (
-            <p className="mb-1 text-[13px] font-medium text-ink">{renderTemplate(subject || title, sample) || '—'}</p>
+            <p dir={rtl ? 'rtl' : 'ltr'} className="mb-1 text-[13px] font-medium text-ink">
+              {renderTemplate(current.subject || (language === 'fr' ? title : texts.fr.subject || title), sample) || '—'}
+            </p>
           )}
-          <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink-soft">
-            {renderTemplate(tab === 'email' ? emailBody || body : body, sample) || '—'}
+          <p dir={rtl ? 'rtl' : 'ltr'} className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink-soft">
+            {renderTemplate(tab === 'email' ? current.emailBody || current.body : current.body, sample) || '—'}
           </p>
           {kind === 'broadcast' && (
             <p className="mt-2 text-[12px] text-ink-muted">
-              En e-mail groupé (copie cachée), les variables du client ({'{prenom}'}, {'{nom}'}…) sont retirées.
+              En e-mail groupé (copie cachée), les variables du client ({'{prenom}'}, {'{nom}'}…) sont retirées et {'{genre}'} devient
+              « Madame, Monsieur ».
             </p>
           )}
         </div>
@@ -255,6 +340,11 @@ export default function MessageTemplatesPage() {
                   {t.kind !== 'broadcast' && <Badge tone="navy">{MESSAGE_KIND_LABELS[t.kind]}</Badge>}
                   {!t.is_active && <Badge>Désactivé</Badge>}
                   {t.email_body && <Badge tone="gold">Version e-mail dédiée</Badge>}
+                  <span className="text-[11px] font-medium tracking-wide text-ink-muted">
+                    {MESSAGE_LANGUAGES.filter((l) => hasLanguage(t, l.value))
+                      .map((l) => l.short)
+                      .join(' · ')}
+                  </span>
                 </div>
                 <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-[13px] leading-relaxed text-ink-muted">{t.body}</p>
               </div>

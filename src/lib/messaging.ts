@@ -1,5 +1,6 @@
+import { arMA, enUS, fr } from 'date-fns/locale';
 import { fmt } from '@/lib/time';
-import type { Client, MessageChannel, MessageTemplate, Session } from '@/lib/types';
+import type { Client, Gender, MessageChannel, MessageLanguage, MessageTemplate, Session } from '@/lib/types';
 
 /*
  * Messages are opened pre-filled in WhatsApp or the e-mail client; the user clicks
@@ -8,6 +9,7 @@ import type { Client, MessageChannel, MessageTemplate, Session } from '@/lib/typ
  */
 
 export const TEMPLATE_VARIABLES = [
+  { key: 'genre', label: 'Civilité : Monsieur / Madame (selon le genre du client)' },
   { key: 'prenom', label: 'Prénom du client' },
   { key: 'nom', label: 'Nom du client' },
   { key: 'code', label: 'Code client' },
@@ -19,23 +21,54 @@ export const TEMPLATE_VARIABLES = [
 
 export type TemplateVars = Partial<Record<(typeof TEMPLATE_VARIABLES)[number]['key'], string>>;
 
+export const MESSAGE_LANGUAGES: { value: MessageLanguage; label: string; short: string }[] = [
+  { value: 'fr', label: 'Français', short: 'FR' },
+  { value: 'ar', label: 'العربية', short: 'AR' },
+  { value: 'en', label: 'English', short: 'EN' },
+];
+
+export const LANGUAGE_NAMES: Record<MessageLanguage, string> = { fr: 'français', ar: 'arabe', en: 'anglais' };
+
+export const isRtl = (language: MessageLanguage) => language === 'ar';
+
+/** Used when the gender is unknown, and in group e-mails where the text is the same for everyone. */
+const CIVILITY: Record<MessageLanguage, Record<Gender | 'unknown', string>> = {
+  fr: { male: 'Monsieur', female: 'Madame', unknown: 'Madame, Monsieur' },
+  ar: { male: 'السيد', female: 'السيدة', unknown: 'السيد(ة)' },
+  en: { male: 'Mr', female: 'Mrs', unknown: 'Mr/Mrs' },
+};
+
+export function civility(gender: Gender | null | undefined, language: MessageLanguage = 'fr') {
+  return CIVILITY[language][gender ?? 'unknown'];
+}
+
+const DATE_FORMATS: Record<MessageLanguage, { locale: typeof fr; date: string; time: string }> = {
+  fr: { locale: fr, date: 'EEEE d MMMM', time: "HH'h'mm" },
+  ar: { locale: arMA, date: 'EEEE d MMMM', time: 'HH:mm' },
+  en: { locale: enUS, date: 'EEEE, MMMM d', time: 'h:mm a' },
+};
+
 export function messageVars({
   client,
   session,
   boxName,
   centreName,
+  language = 'fr',
 }: {
-  client?: Pick<Client, 'first_name' | 'last_name' | 'code'> | null;
+  client?: Pick<Client, 'first_name' | 'last_name' | 'code' | 'gender'> | null;
   session?: Pick<Session, 'starts_at'> | null;
   boxName?: string | null;
   centreName: string;
+  language?: MessageLanguage;
 }): TemplateVars {
+  const f = DATE_FORMATS[language];
   return {
+    genre: civility(client?.gender, language),
     prenom: client?.first_name ?? '',
     nom: client?.last_name ?? '',
     code: client?.code ?? '',
-    date: session ? fmt(session.starts_at, 'EEEE d MMMM') : '',
-    heure: session ? fmt(session.starts_at, "HH'h'mm") : '',
+    date: session ? fmt(session.starts_at, f.date, f.locale) : '',
+    heure: session ? fmt(session.starts_at, f.time, f.locale) : '',
     box: boxName ?? '',
     centre: centreName,
   };
@@ -44,22 +77,50 @@ export function messageVars({
 export function renderTemplate(text: string, vars: TemplateVars) {
   return text
     .replace(/\{(\w+)\}/g, (match, key: string) => (key in vars ? (vars[key as keyof TemplateVars] ?? '') : match))
-    .replace(/[ \t]+([,.!?;:])/g, '$1')
+    .replace(/[ \t]+([,.!?;:،؟])/g, '$1')
     .replace(/[ \t]{2,}/g, ' ')
     .trim();
 }
 
-export function templateUsesSession(template: Pick<MessageTemplate, 'body' | 'email_body' | 'email_subject'>) {
-  const all = `${template.body} ${template.email_body ?? ''} ${template.email_subject ?? ''}`;
+export function usesVariable(text: string | null | undefined, key: string) {
+  return Boolean(text?.includes(`{${key}}`));
+}
+
+/** Raw texts of a template in one language; empty strings when that version is missing. */
+export function templateTexts(template: MessageTemplate, language: MessageLanguage) {
+  if (language === 'fr') {
+    return { body: template.body, emailSubject: template.email_subject ?? '', emailBody: template.email_body ?? '' };
+  }
+  return {
+    body: template[`body_${language}`] ?? '',
+    emailSubject: template[`email_subject_${language}`] ?? '',
+    emailBody: template[`email_body_${language}`] ?? '',
+  };
+}
+
+/** A language is available as soon as its WhatsApp text exists; the e-mail reuses it if needed. */
+export function hasLanguage(template: MessageTemplate | null | undefined, language: MessageLanguage) {
+  return Boolean(template && templateTexts(template, language).body.trim());
+}
+
+/** Raw (unrendered) subject and body for a channel, with the documented fallbacks. */
+export function rawForChannel(template: MessageTemplate, channel: MessageChannel, language: MessageLanguage) {
+  const t = templateTexts(template, language);
+  if (channel === 'whatsapp') return { subject: '', body: t.body };
+  return {
+    subject: t.emailSubject || (language === 'fr' ? template.title : templateTexts(template, 'fr').emailSubject || template.title),
+    body: t.emailBody || t.body,
+  };
+}
+
+export function templateUsesSession(template: MessageTemplate) {
+  const all = MESSAGE_LANGUAGES.map((l) => Object.values(templateTexts(template, l.value)).join(' ')).join(' ');
   return /\{(date|heure|box)\}/.test(all);
 }
 
-export function renderForChannel(template: MessageTemplate, channel: MessageChannel, vars: TemplateVars) {
-  if (channel === 'whatsapp') return { subject: '', body: renderTemplate(template.body, vars) };
-  return {
-    subject: renderTemplate(template.email_subject || template.title, vars),
-    body: renderTemplate(template.email_body || template.body, vars),
-  };
+export function renderForChannel(template: MessageTemplate, channel: MessageChannel, vars: TemplateVars, language: MessageLanguage = 'fr') {
+  const raw = rawForChannel(template, channel, language);
+  return { subject: renderTemplate(raw.subject, vars), body: renderTemplate(raw.body, vars) };
 }
 
 /** International digits for wa.me, e.g. "06 12 34 56 78" → "212612345678". */

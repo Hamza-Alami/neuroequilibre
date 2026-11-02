@@ -31,6 +31,18 @@ export interface CentreSettings {
   opening_hours: OpeningHours;
   currency_label: string;
   phone_country_code: string;
+  legal_name: string;
+  legal_address: string;
+  legal_phone: string;
+  legal_email: string;
+  legal_ice: string;
+  legal_if: string;
+  legal_rc: string;
+  legal_patente: string;
+  legal_cnss: string;
+  invoice_tva_rate: number;
+  invoice_tva_mention: string;
+  invoice_footer: string;
   updated_at?: string;
 }
 
@@ -146,6 +158,51 @@ export interface PackPayment {
   paid_on: string;
   method: PaymentMethod;
   note: string | null;
+  receipt_number: string;
+  created_at: string;
+}
+
+export type InvoiceStatus = 'issued' | 'cancelled';
+
+/** Everything is copied when the invoice is issued, so it never changes afterwards. */
+export interface Invoice {
+  id: string;
+  number: string;
+  client_pack_id: string | null;
+  client_id: string | null;
+  client_code: string;
+  issued_on: string;
+  seller: {
+    name: string;
+    centre_name: string;
+    address: string;
+    phone: string;
+    email: string;
+    ice: string;
+    if: string;
+    rc: string;
+    patente: string;
+    cnss: string;
+    tva_mention: string;
+    footer: string;
+  };
+  billed_name: string;
+  billed_company: string | null;
+  billed_ice: string | null;
+  billed_address: string | null;
+  /** Amounts include VAT; `discount` is the reduction from the reference price. */
+  lines: { label: string; detail: string; quantity: number; amount: number; reference_price: number; discount: number }[];
+  total_ht: number;
+  tva_rate: number;
+  tva_amount: number;
+  total_ttc: number;
+  paid_amount: number;
+  payments: { receipt_number: string; paid_on: string; amount: number; method: PaymentMethod }[];
+  currency: string;
+  notes: string | null;
+  status: InvoiceStatus;
+  cancelled_at: string | null;
+  cancelled_reason: string | null;
   created_at: string;
 }
 
@@ -172,7 +229,9 @@ export interface ClientPack {
 
 export type MessageKind = 'confirmation' | 'reminder' | 'birthday' | 'broadcast';
 export type MessageChannel = 'whatsapp' | 'email';
+export type MessageLanguage = 'fr' | 'ar' | 'en';
 
+/** French texts use the base columns; Arabic and English use the suffixed ones. */
 export interface MessageTemplate {
   id: string;
   kind: MessageKind;
@@ -180,6 +239,12 @@ export interface MessageTemplate {
   body: string;
   email_subject: string | null;
   email_body: string | null;
+  body_ar: string | null;
+  body_en: string | null;
+  email_subject_ar: string | null;
+  email_subject_en: string | null;
+  email_body_ar: string | null;
+  email_body_en: string | null;
   sort_order: number;
   is_active: boolean;
 }

@@ -12,18 +12,24 @@ import { useToast } from '@/components/ui/Toast';
 import { listClientMessages, listTemplates, logMessages } from '@/lib/db/messages';
 import { useAsync } from '@/lib/hooks';
 import {
+  civility,
+  isRtl,
   isValidEmail,
+  LANGUAGE_NAMES,
   mailtoUrl,
   messageVars,
   normalizePhone,
   openMessage,
+  rawForChannel,
   renderForChannel,
   templateUsesSession,
+  usesVariable,
   whatsappUrl,
 } from '@/lib/messaging';
 import { fmt } from '@/lib/time';
-import type { Client, MessageChannel, MessageKind, SessionWithRelations } from '@/lib/types';
+import type { Client, MessageChannel, MessageKind, MessageLanguage, SessionWithRelations } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { effectiveLanguage, LanguagePicker } from './LanguagePicker';
 
 type IndividualKind = Exclude<MessageKind, 'broadcast'>;
 
@@ -42,7 +48,7 @@ export function MessageModal({
   onClose,
 }: {
   open: boolean;
-  client: Pick<Client, 'id' | 'code' | 'first_name' | 'last_name' | 'phone' | 'email'>;
+  client: Pick<Client, 'id' | 'code' | 'first_name' | 'last_name' | 'gender' | 'phone' | 'email'>;
   sessions: SessionWithRelations[];
   initialKind?: IndividualKind;
   initialSessionId?: string | null;
@@ -54,6 +60,7 @@ export function MessageModal({
   const [templateId, setTemplateId] = useState('');
   const [sessionId, setSessionId] = useState('');
   const [channel, setChannel] = useState<MessageChannel>('whatsapp');
+  const [language, setLanguage] = useState<MessageLanguage>('fr');
   const [edit, setEdit] = useState<{ key: string; body: string; subject: string } | null>(null);
   const [openedFor, setOpenedFor] = useState(false);
 
@@ -69,6 +76,7 @@ export function MessageModal({
       setTemplateId('');
       setSessionId(initialSessionId ?? upcoming[0]?.id ?? '');
       setChannel('whatsapp');
+      setLanguage('fr');
       setEdit(null);
     }
   }
@@ -82,6 +90,8 @@ export function MessageModal({
   const template = templates.find((t) => t.id === templateId) ?? templates[0] ?? null;
   const session = sessions.find((s) => s.id === sessionId) ?? null;
   const needsSession = Boolean(template && (kind !== 'birthday' || templateUsesSession(template)));
+  const lang = effectiveLanguage(template, language);
+  const rtl = isRtl(lang);
 
   const generated = template
     ? renderForChannel(
@@ -92,10 +102,14 @@ export function MessageModal({
           session,
           boxName: session ? (session.box?.name ?? boxById.get(session.box_id)?.name) : null,
           centreName: settings.centre_name,
-        })
+          language: lang,
+        }),
+        lang
       )
     : { subject: '', body: '' };
-  const genKey = `${template?.id}|${channel}|${sessionId}`;
+  const raw = template ? rawForChannel(template, channel, lang) : null;
+  const genderMissing = !client.gender && Boolean(raw && (usesVariable(raw.body, 'genre') || usesVariable(raw.subject, 'genre')));
+  const genKey = `${template?.id}|${channel}|${sessionId}|${lang}`;
   const body = edit?.key === genKey ? edit.body : generated.body;
   const subject = edit?.key === genKey ? edit.subject : generated.subject;
 
@@ -116,7 +130,7 @@ export function MessageModal({
       channel === 'whatsapp' ? whatsappUrl(phone!, body) : mailtoUrl({ to: [client.email.trim()], subject, body });
     openMessage(url);
     try {
-      await logMessages([{ clientId: client.id, templateId: template.id, templateTitle: template.title, channel }]);
+      await logMessages([{ clientId: client.id, templateId: template.id, templateTitle: template.title, channel, language: lang }]);
     } catch {
       // the message itself was opened; a missing log entry is not worth blocking the user
     }
@@ -208,17 +222,36 @@ export function MessageModal({
                   ]}
                 />
               </Field>
+              <Field label="Langue" className="sm:col-span-2">
+                <LanguagePicker value={lang} onChange={setLanguage} template={template} />
+              </Field>
             </div>
 
             {channel === 'email' && (
               <Field label="Objet">
-                <Input value={subject} onChange={(e) => setEdit({ key: genKey, body, subject: e.target.value })} />
+                <Input
+                  value={subject}
+                  dir={rtl ? 'rtl' : 'ltr'}
+                  onChange={(e) => setEdit({ key: genKey, body, subject: e.target.value })}
+                />
               </Field>
             )}
             <Field label="Message" hint="Vous pouvez ajuster le texte avant l’envoi.">
-              <Textarea value={body} onChange={(e) => setEdit({ key: genKey, body: e.target.value, subject })} rows={6} />
+              <Textarea
+                value={body}
+                dir={rtl ? 'rtl' : 'ltr'}
+                onChange={(e) => setEdit({ key: genKey, body: e.target.value, subject })}
+                rows={6}
+                className={rtl ? 'text-[15px]' : undefined}
+              />
             </Field>
 
+            {genderMissing && (
+              <Alert tone="info">
+                Genre non renseigné dans la fiche : la civilité « {civility(null, lang)} » est utilisée. Complétez la fiche du client
+                pour personnaliser le message.
+              </Alert>
+            )}
             {blocker && <Alert tone="warning">{blocker}</Alert>}
           </>
         )}
@@ -230,6 +263,7 @@ export function MessageModal({
               {history.map((h) => (
                 <li key={h.id}>
                   {fmt(h.sent_at, "d MMM yyyy 'à' HH:mm")} · {h.template_title} · {h.channel === 'whatsapp' ? 'WhatsApp' : 'E-mail'}
+                  {h.language && h.language !== 'fr' && ` · ${LANGUAGE_NAMES[h.language]}`}
                 </li>
               ))}
             </ul>

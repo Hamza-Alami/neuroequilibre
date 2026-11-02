@@ -8,6 +8,8 @@ interface Option<T extends string> {
   label: ReactNode;
   icon?: ComponentType<{ className?: string }>;
   count?: number;
+  disabled?: boolean;
+  title?: string;
 }
 
 export function Segmented<T extends string>({
@@ -32,10 +34,12 @@ export function Segmented<T extends string>({
             key={o.value}
             type="button"
             onClick={() => onChange(o.value)}
+            disabled={o.disabled}
+            title={o.title}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-lg font-medium transition-colors',
+              'inline-flex items-center gap-1.5 rounded-lg font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40',
               size === 'sm' ? 'h-7 px-2.5 text-[12px]' : 'h-8 px-3 text-[13px]',
-              active ? 'bg-surface text-ink shadow-card ring-1 ring-line' : 'text-ink-muted hover:text-ink'
+              active ? 'bg-surface text-ink shadow-card ring-1 ring-line' : 'text-ink-muted enabled:hover:text-ink'
             )}
           >
             {o.icon && <o.icon className="h-3.5 w-3.5" />}

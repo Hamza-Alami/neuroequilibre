@@ -21,7 +21,7 @@ import { addDaysToKey, fmt, formatCalendarDate, formatTime, nowInCentre, session
 import type { Client, SessionWithRelations } from '@/lib/types';
 import { fullName } from '@/lib/utils';
 
-type BirthdayClient = Pick<Client, 'id' | 'code' | 'first_name' | 'last_name' | 'date_of_birth' | 'phone' | 'email'>;
+type BirthdayClient = Pick<Client, 'id' | 'code' | 'first_name' | 'last_name' | 'gender' | 'date_of_birth' | 'phone' | 'email'>;
 
 function greeting() {
   const h = nowInCentre().getHours();
@@ -39,7 +39,7 @@ export default function DashboardPage() {
     const recent = utcBounds(addDaysToKey(today, -30), addDaysToKey(today, 14));
     const [sessions, clients] = await Promise.all([
       listSessionsBetween(recent.start, recent.end),
-      getSupabase().from('clients').select('id, code, first_name, last_name, date_of_birth, phone, email'),
+      getSupabase().from('clients').select('id, code, first_name, last_name, gender, date_of_birth, phone, email'),
     ]);
     const list = unwrap(clients) as BirthdayClient[];
     return { sessions, clientCount: list.length, birthdays: upcomingBirthdays(list, today).filter((b) => b.daysUntil < 7) };

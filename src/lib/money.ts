@@ -1,8 +1,10 @@
-const formatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const whole = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const cents = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/** "12 500 DH" — narrow no-break spaces are swapped for regular ones so PDFs render them. */
+/** "12 500 DH", "1 580,50 DH" — narrow no-break spaces are swapped for regular ones so PDFs render them. */
 export function formatMoney(amount: number, currency: string) {
-  const value = formatter.format(Math.round(amount * 100) / 100).replace(/\u202f/g, '\u00a0');
+  const rounded = Math.round(amount * 100) / 100;
+  const value = (Number.isInteger(rounded) ? whole : cents).format(rounded).replace(/\u202f/g, '\u00a0');
   return currency ? `${value}\u00a0${currency}` : value;
 }
 

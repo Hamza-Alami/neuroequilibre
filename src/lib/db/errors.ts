@@ -24,6 +24,7 @@ export function toAppError(error: unknown, context?: string): AppError {
   if (e.hint === 'SLOT_ERROR') return new AppError(message, 'slot');
   if (e.hint === 'GAP_WARNING') return new AppError(message, 'gap');
   if (e.hint === 'PAYMENT_ERROR') return new AppError(message, 'conflict');
+  if (e.hint === 'INVOICE_ERROR') return new AppError(message, 'conflict');
 
   if (e.code === '23505') {
     if (message.includes('sessions_box_start_unique')) {
@@ -50,7 +51,12 @@ export function toAppError(error: unknown, context?: string): AppError {
     return new AppError('Cet élément est utilisé ailleurs et ne peut pas être supprimé.', 'conflict');
   }
   if (e.code === '42501' || message.includes('row-level security')) {
-    return new AppError('Action réservée à l\u2019administrateur.', 'permission');
+    return new AppError(
+      message && !message.includes('row-level security') && !message.startsWith('permission denied')
+        ? message
+        : 'Action réservée à l\u2019administrateur.',
+      'permission'
+    );
   }
   if (e.code === 'PGRST116') {
     return new AppError('Élément introuvable ou accès refusé.', 'permission');

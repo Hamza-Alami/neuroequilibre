@@ -32,6 +32,7 @@ import { listClientAssessments } from '@/lib/db/assessments';
 import { deleteClient, getClient } from '@/lib/db/clients';
 import { errorMessage } from '@/lib/db/errors';
 import { listKycSections } from '@/lib/db/kyc';
+import { listClientInvoices } from '@/lib/db/invoices';
 import { listClientPacks, listPayments } from '@/lib/db/packs';
 import { listClientSessions } from '@/lib/db/sessions';
 import { listSources } from '@/lib/db/sources';
@@ -83,8 +84,8 @@ function ClientProfile() {
       getClientStatus(id, todayKey()),
       listSources({ includeInactive: true }),
     ]);
-    const payments = await listPayments(packs.map((p) => p.id));
-    return { client, sessions, assessments, sections, packs, payments, status, sources };
+    const [payments, invoices] = await Promise.all([listPayments(packs.map((p) => p.id)), listClientInvoices(id)]);
+    return { client, sessions, assessments, sections, packs, payments, invoices, status, sources };
   }, [id]);
 
   const evolution = useMemo(
@@ -98,7 +99,7 @@ function ClientProfile() {
     return <EmptyState title="Client introuvable" description="Cette fiche n’existe pas ou a été supprimée." action={<Button href="/clients">Retour aux clients</Button>} />;
   }
 
-  const { client, sessions, sections, packs, payments, status, sources } = data.data;
+  const { client, sessions, sections, packs, payments, invoices, status, sources } = data.data;
   const reload = () => data.reload({ silent: true });
   const clientName = `${client.first_name} ${client.last_name}`;
   const sourceLabel = sources.find((s) => s.id === client.source_id)?.label ?? null;
@@ -274,7 +275,7 @@ function ClientProfile() {
       )}
 
       {tab === 'packs' && (
-        <ClientPacksPanel clientId={id} clientName={clientName} packs={packs} payments={payments} onChanged={reload} />
+        <ClientPacksPanel client={client} packs={packs} payments={payments} invoices={invoices} onChanged={reload} />
       )}
 
       {tab === 'evolution' && <EvolutionPanel client={client} evolution={evolution} sessions={sessions} />}

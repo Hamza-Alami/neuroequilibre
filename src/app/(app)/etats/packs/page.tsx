@@ -1,25 +1,29 @@
 'use client';
 
-import { AlertCircle, Banknote, Package, Percent } from 'lucide-react';
+import { AlertCircle, Banknote, Download, FileText, Package, Percent } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useApp } from '@/components/app/AppProvider';
 import { ExportButtons } from '@/components/reports/ExportButtons';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, StatCard } from '@/components/ui/Card';
 import { Alert, EmptyState, PageLoader } from '@/components/ui/Feedback';
 import { Field, Input, Select } from '@/components/ui/Field';
 import { Segmented } from '@/components/ui/Segmented';
 import { listClients } from '@/lib/db/clients';
 import { errorMessage } from '@/lib/db/errors';
+import { listInvoicesBetween } from '@/lib/db/invoices';
 import { listPackSales, listPaymentsBetween, PAYMENT_METHODS } from '@/lib/db/packs';
 import { useAsync } from '@/lib/hooks';
 import { formatMoney } from '@/lib/money';
+import { exportInvoicePdf } from '@/lib/pdf/invoice-pdf';
 import { monthsBetween, PERIOD_PRESETS, periodLabel, presetRange, type PeriodPreset } from '@/lib/periods';
 import { formatCalendarDate, todayKey } from '@/lib/time';
 import type { Client } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-type View = 'payments' | 'unpaid' | 'sales';
+type View = 'payments' | 'unpaid' | 'sales' | 'invoices';
 
 export default function PacksReportPage() {
   const { settings } = useApp();
@@ -42,6 +46,24 @@ export default function PacksReportPage() {
     () => (validRange ? listPaymentsBetween(range.from, range.to) : Promise.resolve([])),
     [range.from, range.to, validRange]
   );
+  const invoices = useAsync(
+    () => (validRange ? listInvoicesBetween(range.from, range.to) : Promise.resolve([])),
+    [range.from, range.to, validRange]
+  );
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const issuedInvoices = (invoices.data ?? []).filter((i) => i.status === 'issued');
+  const invoicedTotal = issuedInvoices.reduce((s, i) => s + i.total_ttc, 0);
+
+  async function downloadInvoice(id: string) {
+    const invoice = invoices.data?.find((i) => i.id === id);
+    if (!invoice) return;
+    setDownloading(id);
+    try {
+      await exportInvoicePdf(invoice);
+    } finally {
+      setDownloading(null);
+    }
+  }
 
   const clientOf = (id: string): Client | undefined => base.data?.clients.get(id);
   const periodSales = useMemo(
@@ -87,8 +109,9 @@ export default function PacksReportPage() {
         title: 'Encaissements',
         fileBase: `encaissements-${range.from}_${range.to}`,
         columns: [
-          { header: 'Date', width: 26 },
-          { header: 'Code', width: 24 },
+          { header: 'Date', width: 24 },
+          { header: 'Reçu', width: 28 },
+          { header: 'Code', width: 22 },
           { header: 'Client' },
           { header: 'Pack' },
           { header: 'Mode', width: 32 },
@@ -97,6 +120,7 @@ export default function PacksReportPage() {
         ],
         rows: list.map((p) => [
           formatCalendarDate(p.paid_on, 'dd/MM/yyyy'),
+          p.receipt_number,
           p.client_pack?.client?.code ?? '',
           p.client_pack?.client ? `${p.client_pack.client.first_name} ${p.client_pack.client.last_name}` : '',
           p.client_pack?.pack_name ?? '',
@@ -105,7 +129,46 @@ export default function PacksReportPage() {
           money(p.amount),
         ]),
         summary: [`${list.length} règlement(s)`, `Total encaissé : ${money(totals.collected)}`],
-        footer: ['Total', '', '', '', '', '', money(totals.collected)],
+        footer: ['Total', '', '', '', '', '', '', money(totals.collected)],
+      };
+    }
+    if (view === 'invoices') {
+      const list = invoices.data ?? [];
+      return {
+        ...common,
+        title: 'Factures émises',
+        fileBase: `factures-${range.from}_${range.to}`,
+        columns: [
+          { header: 'N°', width: 28 },
+          { header: 'Date', width: 24 },
+          { header: 'Facturé à' },
+          { header: 'Code', width: 22 },
+          { header: 'Statut', width: 24 },
+          { header: 'HT', width: 30, align: 'right' as const },
+          { header: 'TVA', width: 26, align: 'right' as const },
+          { header: 'TTC', width: 30, align: 'right' as const },
+        ],
+        rows: list.map((i) => [
+          i.number,
+          formatCalendarDate(i.issued_on, 'dd/MM/yyyy'),
+          [i.billed_company, i.billed_name].filter(Boolean).join(' · '),
+          i.client_code,
+          i.status === 'cancelled' ? 'Annulée' : 'Émise',
+          money(i.total_ht),
+          money(i.tva_amount),
+          money(i.total_ttc),
+        ]),
+        summary: [`${issuedInvoices.length} facture(s) émise(s)`, `Total facturé : ${money(invoicedTotal)}`, 'Les factures annulées ne sont pas comptées.'],
+        footer: [
+          'Total (hors annulées)',
+          '',
+          '',
+          '',
+          '',
+          money(issuedInvoices.reduce((s, i) => s + i.total_ht, 0)),
+          money(issuedInvoices.reduce((s, i) => s + i.tva_amount, 0)),
+          money(invoicedTotal),
+        ],
       };
     }
     const list = view === 'unpaid' ? unpaid : periodSales;
@@ -244,12 +307,80 @@ export default function PacksReportPage() {
               { value: 'payments', label: 'Encaissements', count: payments.data?.length ?? 0 },
               { value: 'unpaid', label: 'Impayés', count: unpaid.length },
               { value: 'sales', label: 'Ventes', count: periodSales.length },
+              { value: 'invoices', label: 'Factures', count: invoices.data?.length ?? 0 },
             ]}
           />
-          <ExportButtons build={buildExport} disabled={!validRange || payments.loading} />
+          <ExportButtons build={buildExport} disabled={!validRange || payments.loading || invoices.loading} />
         </div>
 
-        {view === 'payments' ? (
+        {view === 'invoices' ? (
+          invoices.loading ? (
+            <PageLoader />
+          ) : invoices.error ? (
+            <div className="p-5">
+              <Alert tone="error">{errorMessage(invoices.error)}</Alert>
+            </div>
+          ) : !invoices.data?.length ? (
+            <EmptyState
+              icon={FileText}
+              title="Aucune facture"
+              description="Les factures s’établissent depuis l’onglet « Packs & règlements » de la fiche client."
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[820px] text-left">
+                <thead>
+                  <tr className="border-b border-line bg-surface-muted text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                    <th className="px-5 py-3">N°</th>
+                    <th className="px-3 py-3">Date</th>
+                    <th className="px-3 py-3">Facturé à</th>
+                    <th className="px-3 py-3">Statut</th>
+                    <th className="px-3 py-3 text-right">Total TTC</th>
+                    <th className="w-24 px-5 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {invoices.data.map((i) => (
+                    <tr key={i.id} className={cn(i.status === 'cancelled' && 'text-ink-muted')}>
+                      <td className="tabular px-5 py-2.5 text-[13px] font-medium text-ink">{i.number}</td>
+                      <td className="tabular px-3 py-2.5 text-[13px] text-ink-soft">{formatCalendarDate(i.issued_on, 'dd/MM/yyyy')}</td>
+                      <td className="px-3 py-2.5 text-[14px]">
+                        {i.client_id ? (
+                          <Link href={`/clients/${i.client_id}?tab=packs`} className="font-medium text-ink hover:text-navy hover:underline">
+                            {i.billed_name}
+                          </Link>
+                        ) : (
+                          <span className="font-medium">{i.billed_name}</span>
+                        )}
+                        {i.billed_company && <span className="ml-2 text-[12px] text-ink-muted">{i.billed_company}</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-[13px]">
+                        {i.status === 'cancelled' ? <Badge tone="danger">Annulée</Badge> : <Badge tone="success">Émise</Badge>}
+                      </td>
+                      <td className={cn('tabular px-3 py-2.5 text-right text-[14px] font-medium', i.status === 'cancelled' ? 'line-through' : 'text-ink')}>
+                        {money(i.total_ttc)}
+                      </td>
+                      <td className="px-5 py-2.5 text-right">
+                        <Button size="sm" variant="ghost" icon={Download} loading={downloading === i.id} onClick={() => downloadInvoice(i.id)}>
+                          PDF
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-line bg-surface-muted">
+                    <td colSpan={4} className="px-5 py-3 text-[13px] font-semibold text-ink">
+                      Total facturé (hors annulées)
+                    </td>
+                    <td className="tabular px-3 py-3 text-right text-[14px] font-semibold text-ink">{money(invoicedTotal)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )
+        ) : view === 'payments' ? (
           payments.loading ? (
             <PageLoader />
           ) : payments.error ? (
@@ -264,6 +395,7 @@ export default function PacksReportPage() {
                 <thead>
                   <tr className="border-b border-line bg-surface-muted text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
                     <th className="px-5 py-3">Date</th>
+                    <th className="px-3 py-3">Reçu</th>
                     <th className="px-3 py-3">Client</th>
                     <th className="px-3 py-3">Pack</th>
                     <th className="px-3 py-3">Mode</th>
@@ -274,6 +406,7 @@ export default function PacksReportPage() {
                   {payments.data.map((p) => (
                     <tr key={p.id}>
                       <td className="tabular px-5 py-2.5 text-[13px] text-ink-soft">{formatCalendarDate(p.paid_on, 'dd/MM/yyyy')}</td>
+                      <td className="tabular px-3 py-2.5 text-[12px] text-ink-muted">{p.receipt_number}</td>
                       <td className="px-3 py-2.5 text-[14px]">
                         {p.client_pack?.client ? (
                           <Link href={`/clients/${p.client_pack.client.id}?tab=packs`} className="font-medium text-ink hover:text-navy hover:underline">
@@ -295,7 +428,7 @@ export default function PacksReportPage() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t border-line bg-surface-muted">
-                    <td colSpan={4} className="px-5 py-3 text-[13px] font-semibold text-ink">
+                    <td colSpan={5} className="px-5 py-3 text-[13px] font-semibold text-ink">
                       Total encaissé
                     </td>
                     <td className="tabular px-5 py-3 text-right text-[14px] font-semibold text-success">{money(totals.collected)}</td>

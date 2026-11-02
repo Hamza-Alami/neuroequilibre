@@ -154,15 +154,18 @@ export async function listPaymentsBetween(from: string, to: string): Promise<Pay
 }
 
 export async function addPayment(input: { clientPackId: string; amount: number; paidOn: string; method: PaymentMethod; note: string }) {
-  unwrap(
-    await getSupabase().from('pack_payments').insert({
+  const res = await getSupabase()
+    .from('pack_payments')
+    .insert({
       client_pack_id: input.clientPackId,
       amount: input.amount,
       paid_on: input.paidOn,
       method: input.method,
       note: input.note.trim() || null,
     })
-  );
+    .select('*')
+    .single();
+  return toPayment(unwrap(res) as Record<string, unknown>);
 }
 
 export async function deletePayment(id: string) {

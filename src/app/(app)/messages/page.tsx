@@ -15,18 +15,22 @@ import { errorMessage } from '@/lib/db/errors';
 import { listTemplates, logMessages } from '@/lib/db/messages';
 import { getClientStatuses } from '@/lib/db/status';
 import { useAsync } from '@/lib/hooks';
+import { effectiveLanguage, LanguagePicker } from '@/components/messages/LanguagePicker';
 import {
   chunk,
+  civility,
+  isRtl,
   isValidEmail,
   mailtoUrl,
   messageVars,
   normalizePhone,
   openMessage,
+  rawForChannel,
   renderTemplate,
   whatsappUrl,
 } from '@/lib/messaging';
 import { todayKey } from '@/lib/time';
-import type { Client, MessageChannel } from '@/lib/types';
+import type { Client, MessageChannel, MessageLanguage } from '@/lib/types';
 import { cn, normalizeSearch } from '@/lib/utils';
 
 type Audience = 'all' | 'active' | 'inactive';
@@ -49,6 +53,7 @@ export default function GroupMessagesPage() {
 
   const [templateId, setTemplateId] = useState('');
   const [channel, setChannel] = useState<MessageChannel>('whatsapp');
+  const [language, setLanguage] = useState<MessageLanguage>('fr');
   const [audience, setAudience] = useState<Audience>('all');
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState('');
@@ -58,11 +63,12 @@ export default function GroupMessagesPage() {
   const templates = data.data?.templates ?? [];
   const template = templates.find((t) => t.id === templateId) ?? templates[0] ?? null;
 
-  const genKey = `${template?.id}|${channel}`;
-  const rawBody = template ? (channel === 'email' ? template.email_body || template.body : template.body) : '';
-  const rawSubject = template ? template.email_subject || template.title : '';
-  const body = edit?.key === genKey ? edit.body : rawBody;
-  const subject = edit?.key === genKey ? edit.subject : rawSubject;
+  const lang = effectiveLanguage(template, language);
+  const rtl = isRtl(lang);
+  const genKey = `${template?.id}|${channel}|${lang}`;
+  const raw = template ? rawForChannel(template, channel, lang) : { subject: '', body: '' };
+  const body = edit?.key === genKey ? edit.body : raw.body;
+  const subject = edit?.key === genKey ? edit.subject : raw.subject;
 
   const recipients = useMemo<Recipient[]>(() => {
     if (!data.data) return [];
@@ -93,11 +99,17 @@ export default function GroupMessagesPage() {
   }
 
   function personalised(r: Recipient) {
-    return renderTemplate(body, messageVars({ client: r.client, centreName: settings.centre_name }));
+    return renderTemplate(body, messageVars({ client: r.client, centreName: settings.centre_name, language: lang }));
   }
 
   function generic(text: string) {
-    return renderTemplate(text, { ...messageVars({ centreName: settings.centre_name }), prenom: '', nom: '', code: '' });
+    return renderTemplate(text, {
+      ...messageVars({ centreName: settings.centre_name, language: lang }),
+      genre: civility(null, lang),
+      prenom: '',
+      nom: '',
+      code: '',
+    });
   }
 
   function ensureBatch() {
@@ -113,7 +125,14 @@ export default function GroupMessagesPage() {
     setBatch({ id: current.id, sent });
     try {
       await logMessages(
-        ids.map((clientId) => ({ clientId, templateId: template?.id ?? null, templateTitle: template?.title ?? '', channel, batchId: current.id }))
+        ids.map((clientId) => ({
+          clientId,
+          templateId: template?.id ?? null,
+          templateTitle: template?.title ?? '',
+          channel,
+          language: lang,
+          batchId: current.id,
+        }))
       );
     } catch {
       // the message was opened; a missing log entry should not interrupt the sending flow
@@ -215,19 +234,34 @@ export default function GroupMessagesPage() {
                     { value: 'email', label: 'E-mail', icon: Mail },
                   ]}
                 />
+                <Field label="Langue">
+                  <LanguagePicker
+                    value={lang}
+                    onChange={(l) => {
+                      setLanguage(l);
+                      resetBatch();
+                    }}
+                    template={template}
+                  />
+                </Field>
                 {channel === 'email' && (
                   <Field label="Objet">
-                    <Input value={subject} onChange={(e) => setEdit({ key: genKey, body, subject: e.target.value })} />
+                    <Input value={subject} dir={rtl ? 'rtl' : 'ltr'} onChange={(e) => setEdit({ key: genKey, body, subject: e.target.value })} />
                   </Field>
                 )}
                 <Field label="Texte">
-                  <Textarea value={body} onChange={(e) => setEdit({ key: genKey, body: e.target.value, subject })} rows={6} />
+                  <Textarea
+                    value={body}
+                    dir={rtl ? 'rtl' : 'ltr'}
+                    onChange={(e) => setEdit({ key: genKey, body: e.target.value, subject })}
+                    rows={6}
+                  />
                 </Field>
                 <div className="rounded-xl border border-line bg-surface-muted p-4">
                   <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
                     {channel === 'whatsapp' ? `Aperçu pour ${preview ? preview.client.first_name : 'un client'}` : 'Aperçu (identique pour tous)'}
                   </p>
-                  <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink-soft">
+                  <p dir={rtl ? 'rtl' : 'ltr'} className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink-soft">
                     {channel === 'whatsapp' && preview ? personalised(preview) : generic(body)}
                   </p>
                   {channel === 'email' && (

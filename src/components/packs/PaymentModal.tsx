@@ -11,9 +11,20 @@ import { errorMessage } from '@/lib/db/errors';
 import { addPayment, PAYMENT_METHODS } from '@/lib/db/packs';
 import { formatMoney, parseAmount } from '@/lib/money';
 import { todayKey } from '@/lib/time';
-import type { ClientPack, PaymentMethod } from '@/lib/types';
+import type { Client, ClientPack, PackPayment, PaymentMethod } from '@/lib/types';
+import { ReceiptReady } from './ReceiptReady';
 
-export function PaymentModal({ pack, onClose, onSaved }: { pack: ClientPack | null; onClose: () => void; onSaved: () => void }) {
+export function PaymentModal({
+  pack,
+  client,
+  onClose,
+  onSaved,
+}: {
+  pack: ClientPack | null;
+  client: Pick<Client, 'first_name' | 'last_name' | 'code' | 'gender'>;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const { settings } = useApp();
   const toast = useToast();
   const currency = settings.currency_label;
@@ -23,6 +34,7 @@ export function PaymentModal({ pack, onClose, onSaved }: { pack: ClientPack | nu
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<{ payment: PackPayment; paidToDate: number } | null>(null);
   const [openedFor, setOpenedFor] = useState<string | null>(null);
 
   if ((pack?.id ?? null) !== openedFor) {
@@ -33,6 +45,7 @@ export function PaymentModal({ pack, onClose, onSaved }: { pack: ClientPack | nu
       setMethod('especes');
       setNote('');
       setError(null);
+      setSaved(null);
     }
   }
 
@@ -47,15 +60,39 @@ export function PaymentModal({ pack, onClose, onSaved }: { pack: ClientPack | nu
     setSaving(true);
     setError(null);
     try {
-      await addPayment({ clientPackId: pack.id, amount: value, paidOn, method, note });
-      toast.success('Règlement enregistré.');
+      const payment = await addPayment({ clientPackId: pack.id, amount: value, paidOn, method, note });
+      toast.success(`Règlement enregistré · reçu ${payment.receipt_number}.`);
+      setSaved({ payment, paidToDate: pack.paid_amount + payment.amount });
       onSaved();
-      onClose();
     } catch (e) {
       setError(errorMessage(e));
     } finally {
       setSaving(false);
     }
+  }
+
+  if (pack && saved) {
+    return (
+      <Modal
+        open
+        onClose={onClose}
+        size="sm"
+        title="Règlement enregistré"
+        footer={
+          <Button variant="secondary" onClick={onClose}>
+            Fermer
+          </Button>
+        }
+      >
+        <ReceiptReady
+          payment={saved.payment}
+          client={client}
+          packName={pack.pack_name}
+          agreedPrice={pack.agreed_price}
+          paidToDate={saved.paidToDate}
+        />
+      </Modal>
+    );
   }
 
   return (
@@ -95,7 +132,7 @@ export function PaymentModal({ pack, onClose, onSaved }: { pack: ClientPack | nu
             </Select>
           </Field>
         </div>
-        <Field label="Remarque">
+        <Field label="Remarque" hint="Imprimée sur le reçu.">
           <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="N° de chèque, référence…" />
         </Field>
       </div>

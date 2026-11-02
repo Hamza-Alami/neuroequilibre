@@ -1,6 +1,6 @@
 'use client';
 
-import { Gift, Package, Pencil, Plus, Trash2, Wallet } from 'lucide-react';
+import { Ban, Download, FileText, Gift, Package, Pencil, Plus, Trash2, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { useApp } from '@/components/app/AppProvider';
 import { Badge } from '@/components/ui/Badge';
@@ -11,24 +11,28 @@ import { EmptyState } from '@/components/ui/Feedback';
 import { useToast } from '@/components/ui/Toast';
 import { deleteClientPack, deletePayment, PAYMENT_METHODS } from '@/lib/db/packs';
 import { formatMoney } from '@/lib/money';
+import { exportInvoicePdf } from '@/lib/pdf/invoice-pdf';
+import { exportReceiptPdf } from '@/lib/pdf/receipt-pdf';
 import { formatCalendarDate } from '@/lib/time';
-import type { ClientPack, PackPayment } from '@/lib/types';
+import type { Client, ClientPack, Invoice, PackPayment } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { CancelInvoiceModal } from './CancelInvoiceModal';
 import { EditClientPackModal } from './EditClientPackModal';
+import { InvoiceModal } from './InvoiceModal';
 import { PaymentModal } from './PaymentModal';
 import { SellPackModal } from './SellPackModal';
 
 export function ClientPacksPanel({
-  clientId,
-  clientName,
+  client,
   packs,
   payments,
+  invoices,
   onChanged,
 }: {
-  clientId: string;
-  clientName: string;
+  client: Client;
   packs: ClientPack[];
   payments: PackPayment[];
+  invoices: Invoice[];
   onChanged: () => void;
 }) {
   const { settings, isAdmin } = useApp();
@@ -39,7 +43,30 @@ export function ClientPacksPanel({
   const [editing, setEditing] = useState<ClientPack | null>(null);
   const [toDelete, setToDelete] = useState<ClientPack | null>(null);
   const [paymentToDelete, setPaymentToDelete] = useState<PackPayment | null>(null);
+  const [invoicing, setInvoicing] = useState<ClientPack | null>(null);
+  const [invoiceToCancel, setInvoiceToCancel] = useState<Invoice | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const orphanInvoices = invoices.filter((inv) => !packs.some((p) => p.id === inv.client_pack_id));
+
+  async function download(key: string, fn: () => Promise<void>) {
+    setDownloading(key);
+    try {
+      await fn();
+    } catch (e) {
+      toast.error(e);
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  function receipt(p: ClientPack, list: PackPayment[], index: number) {
+    const paidToDate = list.slice(0, index + 1).reduce((sum, x) => sum + x.amount, 0);
+    const x = list[index];
+    return download(x.id, () =>
+      exportReceiptPdf({ payment: x, client, packName: p.pack_name, agreedPrice: p.agreed_price, paidToDate, settings })
+    );
+  }
 
   const totals = packs.reduce(
     (acc, p) => ({ agreed: acc.agreed + p.agreed_price, paid: acc.paid + p.paid_amount, remaining: acc.remaining + p.remaining_amount }),
@@ -99,6 +126,8 @@ export function ClientPacksPanel({
       ) : (
         packs.map((p) => {
           const list = payments.filter((x) => x.client_pack_id === p.id);
+          const packInvoices = invoices.filter((inv) => inv.client_pack_id === p.id);
+          const activeInvoice = packInvoices.find((inv) => inv.status === 'issued') ?? null;
           const remainingSessions = Math.max(p.total_sessions - p.used_sessions, 0);
           const usedPct = p.total_sessions ? Math.min(100, (p.used_sessions / p.total_sessions) * 100) : 0;
           const bookedPct = p.total_sessions ? Math.min(100, (p.booked_sessions / p.total_sessions) * 100) : 0;
@@ -122,12 +151,28 @@ export function ClientPacksPanel({
                     {p.notes && <> · {p.notes}</>}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-1.5">
+                <div className="flex shrink-0 flex-wrap gap-1.5">
                   <Button size="sm" variant="secondary" icon={Wallet} onClick={() => setPaying(p)} disabled={p.remaining_amount <= 0}>
                     Règlement
                   </Button>
+                  {activeInvoice ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      icon={FileText}
+                      title="Télécharger la facture"
+                      loading={downloading === activeInvoice.id}
+                      onClick={() => download(activeInvoice.id, () => exportInvoicePdf(activeInvoice))}
+                    >
+                      {activeInvoice.number}
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="ghost" icon={FileText} onClick={() => setInvoicing(p)}>
+                      Établir une facture
+                    </Button>
+                  )}
                   <Button size="sm" variant="ghost" icon={Pencil} title="Modifier" onClick={() => setEditing(p)} />
-                  {(isAdmin || list.length === 0) && (
+                  {(isAdmin || list.length === 0) && !activeInvoice && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -191,12 +236,23 @@ export function ClientPacksPanel({
                     {list.map((x, i) => (
                       <li key={x.id} className="flex items-center justify-between gap-3 py-2 text-[13px]">
                         <span className="text-ink-soft">
+                          <span className="tabular text-[12px] font-medium text-ink-muted">{x.receipt_number}</span> ·{' '}
                           {formatCalendarDate(x.paid_on, 'dd/MM/yyyy')} · {PAYMENT_METHODS[x.method]}
                           {i === 0 && <span className="text-ink-muted"> · avance</span>}
                           {x.note && <span className="text-ink-muted"> · {x.note}</span>}
                         </span>
                         <span className="flex items-center gap-2">
                           <span className="tabular font-medium text-ink">{formatMoney(x.amount, currency)}</span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            icon={Download}
+                            title={`Télécharger le reçu ${x.receipt_number}`}
+                            loading={downloading === x.id}
+                            onClick={() => receipt(p, list, i)}
+                          >
+                            Reçu
+                          </Button>
                           {isAdmin && (
                             <button
                               type="button"
@@ -213,13 +269,43 @@ export function ClientPacksPanel({
                   </ul>
                 </div>
               )}
+
+              {packInvoices.length > 0 && (
+                <div className="border-t border-line px-5 py-3">
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Factures</p>
+                  <InvoiceList
+                    invoices={packInvoices}
+                    currency={currency}
+                    isAdmin={isAdmin}
+                    downloading={downloading}
+                    onDownload={(inv) => download(inv.id, () => exportInvoicePdf(inv))}
+                    onCancel={setInvoiceToCancel}
+                  />
+                </div>
+              )}
             </Card>
           );
         })
       )}
 
-      <SellPackModal open={selling} clientId={clientId} clientName={clientName} onClose={() => setSelling(false)} onSold={onChanged} />
-      <PaymentModal pack={paying} onClose={() => setPaying(null)} onSaved={onChanged} />
+      {orphanInvoices.length > 0 && (
+        <Card>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Factures de packs supprimés</p>
+          <InvoiceList
+            invoices={orphanInvoices}
+            currency={currency}
+            isAdmin={isAdmin}
+            downloading={downloading}
+            onDownload={(inv) => download(inv.id, () => exportInvoicePdf(inv))}
+            onCancel={setInvoiceToCancel}
+          />
+        </Card>
+      )}
+
+      <SellPackModal open={selling} client={client} onClose={() => setSelling(false)} onSold={onChanged} />
+      <PaymentModal pack={paying} client={client} onClose={() => setPaying(null)} onSaved={onChanged} />
+      <InvoiceModal pack={invoicing} client={client} onClose={() => setInvoicing(null)} onIssued={onChanged} />
+      <CancelInvoiceModal invoice={invoiceToCancel} onClose={() => setInvoiceToCancel(null)} onCancelled={onChanged} />
       <EditClientPackModal pack={editing} onClose={() => setEditing(null)} onSaved={onChanged} />
       <ConfirmDialog
         open={Boolean(toDelete)}
@@ -240,5 +326,60 @@ export function ClientPacksPanel({
         onCancel={() => setPaymentToDelete(null)}
       />
     </div>
+  );
+}
+
+function InvoiceList({
+  invoices,
+  currency,
+  isAdmin,
+  downloading,
+  onDownload,
+  onCancel,
+}: {
+  invoices: Invoice[];
+  currency: string;
+  isAdmin: boolean;
+  downloading: string | null;
+  onDownload: (invoice: Invoice) => void;
+  onCancel: (invoice: Invoice) => void;
+}) {
+  return (
+    <ul className="divide-y divide-line">
+      {invoices.map((inv) => {
+        const cancelled = inv.status === 'cancelled';
+        return (
+          <li key={inv.id} className="flex flex-wrap items-center justify-between gap-3 py-2 text-[13px]">
+            <span className={cn('min-w-0 text-ink-soft', cancelled && 'text-ink-muted')}>
+              <span className={cn('tabular font-medium', cancelled ? 'line-through' : 'text-ink')}>{inv.number}</span> · du{' '}
+              {formatCalendarDate(inv.issued_on, 'dd/MM/yyyy')} · {inv.billed_company || inv.billed_name} ·{' '}
+              {formatMoney(inv.total_ttc, inv.currency || currency)}
+              {cancelled && (
+                <>
+                  {' '}
+                  <Badge tone="danger">Annulée</Badge>
+                  {inv.cancelled_reason && <span className="text-[12px]"> · {inv.cancelled_reason}</span>}
+                </>
+              )}
+            </span>
+            <span className="flex items-center gap-1">
+              <Button size="sm" variant="ghost" icon={Download} loading={downloading === inv.id} onClick={() => onDownload(inv)}>
+                PDF
+              </Button>
+              {isAdmin && !cancelled && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={Ban}
+                  title="Annuler la facture"
+                  onClick={() => onCancel(inv)}
+                  className="text-ink-muted hover:bg-danger-50 hover:text-danger"
+                />
+              )}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

@@ -27,6 +27,7 @@ export const ENTITY_LABELS: Record<string, string> = {
   packs: 'Pack',
   client_packs: 'Pack client',
   pack_payments: 'Règlement',
+  invoices: 'Facture',
   message_templates: 'Modèle de message',
   centre_settings: 'Paramètres',
   assessments: 'Évaluation',

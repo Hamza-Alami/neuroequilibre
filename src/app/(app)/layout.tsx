@@ -29,7 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!settingsRes.data) {
     return <SetupRequired reason="schema" />;
   }
-  if (!('currency_label' in settingsRes.data)) {
+  if (!('invoice_tva_rate' in settingsRes.data)) {
     return <SetupRequired reason="migration" />;
   }
 

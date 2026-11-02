@@ -1,5 +1,5 @@
 import { getSupabase } from '@/lib/supabase/client';
-import type { MessageChannel, MessageKind, MessageTemplate } from '@/lib/types';
+import type { MessageChannel, MessageKind, MessageLanguage, MessageTemplate } from '@/lib/types';
 import { unwrap } from './errors';
 
 export const MESSAGE_KIND_LABELS: Record<MessageKind, string> = {
@@ -15,7 +15,20 @@ export async function listTemplates({ includeInactive = false } = {}): Promise<M
   return unwrap(await q) as MessageTemplate[];
 }
 
-export type TemplateInput = Pick<MessageTemplate, 'kind' | 'title' | 'body' | 'email_subject' | 'email_body'>;
+export type TemplateInput = Pick<
+  MessageTemplate,
+  | 'kind'
+  | 'title'
+  | 'body'
+  | 'email_subject'
+  | 'email_body'
+  | 'body_ar'
+  | 'body_en'
+  | 'email_subject_ar'
+  | 'email_subject_en'
+  | 'email_body_ar'
+  | 'email_body_en'
+>;
 
 export async function createTemplate(input: TemplateInput, sortOrder: number) {
   unwrap(await getSupabase().from('message_templates').insert({ ...input, sort_order: sortOrder }));
@@ -34,6 +47,7 @@ export interface MessageLogEntry {
   templateId: string | null;
   templateTitle: string;
   channel: MessageChannel;
+  language: MessageLanguage;
   batchId?: string;
 }
 
@@ -46,6 +60,7 @@ export async function logMessages(entries: MessageLogEntry[]) {
         template_id: e.templateId,
         template_title: e.templateTitle,
         channel: e.channel,
+        language: e.language,
         batch_id: e.batchId ?? null,
       }))
     )
@@ -57,6 +72,7 @@ export interface MessageLogRow {
   client_id: string | null;
   template_title: string;
   channel: MessageChannel;
+  language: MessageLanguage;
   batch_id: string | null;
   sent_at: string;
 }
@@ -64,7 +80,7 @@ export interface MessageLogRow {
 export async function listClientMessages(clientId: string, limit = 20): Promise<MessageLogRow[]> {
   const res = await getSupabase()
     .from('message_log')
-    .select('id, client_id, template_title, channel, batch_id, sent_at')
+    .select('id, client_id, template_title, channel, language, batch_id, sent_at')
     .eq('client_id', clientId)
     .order('sent_at', { ascending: false })
     .limit(limit);
@@ -74,7 +90,7 @@ export async function listClientMessages(clientId: string, limit = 20): Promise<
 export async function listBatchMessages(batchId: string): Promise<MessageLogRow[]> {
   const res = await getSupabase()
     .from('message_log')
-    .select('id, client_id, template_title, channel, batch_id, sent_at')
+    .select('id, client_id, template_title, channel, language, batch_id, sent_at')
     .eq('batch_id', batchId);
   return unwrap(res) as MessageLogRow[];
 }

@@ -8,6 +8,7 @@ import {
   format,
   startOfMonth,
   startOfWeek,
+  type Locale,
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type { DayHours, OpeningHours } from '@/lib/types';
@@ -58,8 +59,8 @@ export function toUtcIso(date: string, time: string) {
   return new Date(new TZDate(y, m - 1, d, h, min, currentTz).getTime()).toISOString();
 }
 
-export function fmt(date: Date | string, pattern: string) {
-  return format(new Date(date), pattern, { locale: fr, in: tz(currentTz) });
+export function fmt(date: Date | string, pattern: string, locale: Locale = fr) {
+  return format(new Date(date), pattern, { locale, in: tz(currentTz) });
 }
 
 export const formatDate = (date: Date | string) => fmt(date, 'd MMMM yyyy');
